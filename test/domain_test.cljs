@@ -58,3 +58,7 @@
     (a/equal (:verdict h) "unhealthy")
     (a/ok (some #{"status-held"} (:reasons h)))
     (a/equal (:verdict (d/health x nil now)) "unhealthy"))))
+
+(test "review fix: a profile without the PHI rule is refused"
+  (fn [] (let [p (clone (get profiles "iryo"))] (aset (aget p "profile") "phi" nil)
+    (a/ok (some #{"phi-rule"} (d/profile-problems p "iryo"))))))

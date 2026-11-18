@@ -26,6 +26,15 @@
    "60" "検査" "64" "病理" "70" "画像診断"
    "80" "その他" "90" "入院"})
 
+(def outpatient-shikibetsu
+  "Codes this outpatient-only draft accepts (90 入院 is excluded). A set, so
+  prototype names such as \"toString\" never pass."
+  (disj (set (keys shikibetsu-kubun)) "90"))
+(def max-ten 999999)
+(def max-count 99)
+(def max-yakka 999999)
+(def max-days 365)
+
 (def kubun-order
   ["初診" "再診" "医学管理" "在宅" "投薬" "注射"
    "処置" "手術" "麻酔" "検査" "病理" "画像診断" "その他" "入院"])
@@ -108,23 +117,24 @@
 (defn- tokens [line] (vec (remove str/blank? (str/split (str/trim line) #"[ \t　]+"))))
 (defn- number [s] (when (and (string? s) (re-matches #"\d+(\.\d+)?" s)) #?(:clj (Double/parseDouble s) :cljs (js/Number s))))
 (defn- whole [s] (when (and (string? s) (re-matches #"\d+" s)) (number s)))
+(defn- within [n hi] (and (some? n) (<= n hi)))
 (defn- name-ok? [s] (and (string? s) (<= 1 (count s) 60)))
 
 (defn parse-line [n line]
   (let [[kind & args :as ts] (tokens line) bad (fn [] (refuse "line-shape" {:line n}))]
     (case kind
       "行為" (let [[sk nm ten cnt] args]
-               (when-not (and (contains? shikibetsu-kubun sk) (name-ok? nm) (whole ten) (<= (count ts) 5)
-                              (or (nil? cnt) (and (whole cnt) (pos? (whole cnt)))))
+               (when-not (and (contains? outpatient-shikibetsu sk) (name-ok? nm) (within (whole ten) max-ten) (<= (count ts) 5)
+                              (or (nil? cnt) (and (within (whole cnt) max-count) (pos? (whole cnt)))))
                  (bad))
                {:kind "act" :shikibetsu sk :name nm :unit-ten (whole ten) :count (or (whole cnt) 1)})
       "薬" (let [[sk nm yakka days] args]
-             (when-not (and (contains? shikibetsu-kubun sk) (str/starts-with? sk "2") (name-ok? nm) (number yakka)
-                            (= 5 (count ts)) (whole days))
+             (when-not (and (contains? outpatient-shikibetsu sk) (str/starts-with? sk "2") (name-ok? nm) (within (number yakka) max-yakka)
+                            (= 5 (count ts)) (within (whole days) max-days))
                (bad))
              {:kind "drug" :shikibetsu sk :name nm :yakka-per-day (number yakka) :days (max 1 (whole days))})
       "材" (let [[nm yakka amount] args]
-             (when-not (and (name-ok? nm) (number yakka) (<= (count ts) 4) (or (nil? amount) (number amount))) (bad))
+             (when-not (and (name-ok? nm) (within (number yakka) max-yakka) (<= (count ts) 4) (or (nil? amount) (within (number amount) max-count))) (bad))
              {:kind "material" :shikibetsu "40" :name nm :yakka (number yakka) :amount (or (number amount) 1)})
       "病名" (let [[nm flag] args]
                (when-not (and (name-ok? nm) (<= (count ts) 3) (contains? #{nil "主" "疑い"} flag)) (bad))
@@ -185,6 +195,7 @@
                      (empty? lines) (conj "empty-rezept")
                      (empty? dx) (conj "no-diagnosis")
                      (and (seq dx) (not (some :main dx))) (conj "no-main-diagnosis")
+                     (> (count (filter :main dx)) 1) (conj "multiple-main-diagnoses")
                      (and (seq drugs) (empty? dx)) (conj "drug-without-diagnosis")
                      (and (:kogaku-kubun patient) (nil? limit)) (conj "kogaku-kubun-unknown"))
      :status "draft"}))

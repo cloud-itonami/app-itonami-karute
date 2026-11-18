@@ -33,7 +33,7 @@
         :dx "A の病名" :no-dx "A から病名を読み取れません。" :main "主" :suspected "疑い"
         :observations {"section-missing" "欠けている見出しがあります" "vital-implausible" "ありえない値のバイタルがあります" "vital-outside-reference" "参考範囲外のバイタルがあります"
                        "plan-without-assessment" "P があるのに A に病名がありません" "empty-rezept" "算定する行がありません（空レセプト）" "no-diagnosis" "病名がありません"
-                       "no-main-diagnosis" "主病名がありません" "drug-without-diagnosis" "病名なしの投薬があります" "kogaku-kubun-unknown" "高額療養費の区分を確認できません"}
+                       "no-main-diagnosis" "主病名がありません" "multiple-main-diagnoses" "主病名が複数あります" "drug-without-diagnosis" "病名なしの投薬があります" "kogaku-kubun-unknown" "高額療養費の区分を確認できません"}
         :soap-note "記載の有無と一般的な成人の参考範囲を機械的に確かめるだけで、診断や診療の評価ではありません。判断は医師が行います。記録は端末の外へ送らず、保存もしません。"
         :to-rezept "病名をレセプトへ渡す" :carried "A の病名をレセプトの入力に加えました（端末内）。"
         :rezept-title "レセプトの算定案（端末内）" :rezept-label "算定行（1 行 1 件）"
@@ -68,7 +68,7 @@
         :dx "Problems in A" :no-dx "No problem names could be read from A." :main "main" :suspected "suspected"
         :observations {"section-missing" "a section is missing" "vital-implausible" "a vital sign has an implausible value" "vital-outside-reference" "a vital sign is outside the reference range"
                        "plan-without-assessment" "P is written but A names no problem" "empty-rezept" "no billable line (empty claim)" "no-diagnosis" "no diagnosis"
-                       "no-main-diagnosis" "no main diagnosis" "drug-without-diagnosis" "a drug is billed without a diagnosis" "kogaku-kubun-unknown" "unknown high-cost category"}
+                       "no-main-diagnosis" "no main diagnosis" "multiple-main-diagnoses" "more than one main diagnosis" "drug-without-diagnosis" "a drug is billed without a diagnosis" "kogaku-kubun-unknown" "unknown high-cost category"}
         :soap-note "A mechanical check of which sections are written and of general adult reference ranges. It is not a diagnosis or a rating of care; the physician decides. The note never leaves the device and is not stored."
         :to-rezept "Carry problems to the claim" :carried "Added the problems from A to the claim input (on device)."
         :rezept-title "Claim (レセプト) draft (on device)" :rezept-label "Claim lines (one per line)"

@@ -54,7 +54,9 @@ Input is one line per item:
 病名 <名称> [主|疑い]
 ```
 
-Observations: 空レセプト, 病名なし, 主病名なし, 病名なし投薬, unknown 高額療養費 区分. They are observations, not adjudication; the clinic is the billing principal and the 審査支払機関 decides.
+Lines with 診療識別 90 (入院) are refused, and 点数, 回数, 薬価 and 日数 have upper bounds.
+
+Observations: 空レセプト, 病名なし, 主病名なし, more than one 主病名, 病名なし投薬, unknown 高額療養費 区分. They are observations, not adjudication; the clinic is the billing principal and the 審査支払機関 decides.
 
 **Limits:**
 - 点数 and 薬価 are taken as typed; there is no 厚労省 master in the app.

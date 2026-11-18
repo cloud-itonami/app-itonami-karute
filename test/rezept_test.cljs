@@ -78,3 +78,15 @@
     (a/equal (reason #(r/parse (apply str (repeat 81 "行為 12 再診料 75\n")))) "too-many-lines")
     (a/equal (reason #(r/parse (apply str (repeat 700 "病名 感冒\n")))) "input-too-long")
     (a/equal (count (r/parse "# comment\n\n行為 12 再診料 75")) 1)))
+
+(test "review fixes: 入院 code, prototype names and absurd numbers are refused"
+  (fn [] (a/equal (reason #(r/parse "行為 90 入院基本料 1688 10")) "line-shape")
+    (a/equal (reason #(r/parse "行為 toString 謎 10")) "line-shape")
+    (a/equal (reason #(r/parse "行為 constructor 謎 10")) "line-shape")
+    (a/equal (reason #(r/parse "行為 12 再診料 7500000")) "line-shape")
+    (a/equal (reason #(r/parse "行為 12 再診料 75 100")) "line-shape")
+    (a/equal (reason #(r/parse "薬 21 A 100 400")) "line-shape")
+    (a/equal (count (r/parse "行為 12 再診料 999999 99")) 1)))
+
+(test "review fixes: two 主病名 are observed"
+  (fn [] (a/deepEqual (:observations (calc "行為 12 再診料 75\n病名 2型糖尿病 主\n病名 感冒 主" {})) ["multiple-main-diagnoses"])))

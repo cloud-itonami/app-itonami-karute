@@ -46,3 +46,14 @@
 
 (test "the clinical check adds no network operation"
   (fn [] (a/deepEqual (mapv :operation (:operations (d/descriptor))) ["read-assignments" "read-activity"])))
+
+(test "review fixes: 「P: 72」 in O is a pulse, not the Plan header; ・ stays inside one name"
+  (fn [] (let [r (s/check "O: BT 36.8\nP: 72 BP 120/70\nA: 感冒\nP: 経過観察")]
+    (a/equal (:value (by-id (:vitals r) "pulse")) 72)
+    (a/equal (:text (by-id (:vitals r) "blood-pressure")) "120/70")
+    (a/deepEqual (:missing r) ["S"]))
+    (a/deepEqual (mapv :name (s/diagnoses "#1 右膝関節症・変形性")) ["右膝関節症・変形性"])))
+
+(test "a plan that starts with a count is still the Plan header"
+  (fn [] (a/deepEqual (:missing (s/check "S: 2日前から\nO: BT 36.5\nA: 感冒\nP: 14日分処方")) [])
+    (a/deepEqual (:missing (s/check "S: x\nO: y\nA: 感冒\nP: 3日後に再診")) [])))

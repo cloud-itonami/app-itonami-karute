@@ -4,7 +4,7 @@ Source, build, browser and device evidence are recorded separately below. None o
 
 ## Source
 
-`npm test`: 22/22 pass.
+`npm test`: 27/27 pass (22 at the device run, plus 5 added for the review fixes below).
 
 **Profiles**
 - Both bundled medical profiles verify.
@@ -81,6 +81,20 @@ The emulator ran `sdk_phone64_arm64` Android 15 (`AE3A.240806.019`, userdebug, t
 The note and claim text were set through the debug WebView's DevTools, because `adb input` cannot type Japanese. Every button and the consent dialog were real taps.
 
 The first two device attempts at the claim showed 「空レセプト」. The cause was my DevTools helper, not the app: a script scope clash, then a wrong selector. The input was never set. Once it was set, the result matched the browser.
+
+## Review fixes (after the device run)
+
+A review of the PR head found these, now fixed with tests:
+
+- 診療識別 90 (入院) is refused, since the draft is outpatient-only and uses the 外来 高額療養費 cap.
+- 診療識別 is checked against a set, so prototype names such as `toString` are refused.
+- 点数, 回数, 薬価 and 日数 have upper bounds (999999 / 99 / 999999 / 365).
+- Two 主病名 are observed (`multiple-main-diagnoses`). Carrying problems from a note into a claim that already has a 主病名 can cause this.
+- 「P: 72」 written in O is read as a pulse rather than as the Plan header. 「P: 3日後に再診」 and 「P: 14日分処方」 stay headers.
+- A problem name containing ・ is no longer split.
+- A profile without the PHI rule is refused.
+
+These changes were verified by `npm test` and `npm run build`. The APK and emulator run above were made from the source before these fixes (commit `8b9fc33`), and they were not repeated.
 
 ## Not verified / known gaps
 

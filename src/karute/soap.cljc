@@ -51,7 +51,10 @@
       (into {} (map (fn [[k v]] [k (str/trim v)]) acc))
       (let [line (first lines)
             m (re-matches header-re line)]
-        (if m
+        ;; 「P: 72」 is a pulse written in O, not the Plan header. A plan such as
+        ;; 「P: 3日後に再診」 or 「P: 14日分処方」 is still a header.
+        (if (and m (not (and (= "P" (str/upper-case (nth m 1)))
+                             (re-find #"^\d{2,3}(?![\d.日回錠週か月年分])" (nth m 2)))))
           (let [k (str/upper-case (nth m 1))]
             (recur (rest lines) k (assoc acc k (str (get acc k "") (nth m 2) "\n"))))
           (recur (rest lines) current (assoc acc current (str (get acc current "") line "\n"))))))))
@@ -62,7 +65,7 @@
 ;; person should look at again. Plausible bounds catch typos (体温 365).
 (def vital-specs
   [{:id "temperature" :re #"(?:体温|BT|KT)\s*:?\s*(\d{2,3}(?:\.\d)?)" :unit "℃" :plausible [30 43] :reference [35.0 37.4]}
-   {:id "pulse" :re #"(?:脈拍|HR|PR)\s*:?\s*(\d{2,3})" :unit "/min" :plausible [20 250] :reference [50 100]}
+   {:id "pulse" :re #"(?:脈拍|HR|PR|(?<![A-Za-z])P(?=\s*:?\s*\d))\s*:?\s*(\d{2,3})" :unit "/min" :plausible [20 250] :reference [50 100]}
    {:id "spo2" :re #"(?:SpO2|SPO2|spo2)\s*:?\s*(\d{2,3})" :unit "%" :plausible [50 100] :reference [95 100]}
    {:id "respiration" :re #"(?:呼吸数|RR)\s*:?\s*(\d{1,2})" :unit "/min" :plausible [4 60] :reference [12 20]}])
 
@@ -91,7 +94,7 @@
 ;; Problem names in A: 「#1 急性上気道炎 #2 高血圧症」, one per line, or separated by
 ;; 、 ・ , ;. A name containing 疑い is a suspected diagnosis (疑い病名).
 (defn diagnoses [a-text]
-  (->> (str/split (or a-text "") #"#\s*\d*|\n|、|・|,|;|；")
+  (->> (str/split (or a-text "") #"#\s*\d*|\n|、|;|；")
        (map (fn [s] (str/trim (str/replace s #"^\d+[.)）]\s*" ""))))
        (remove str/blank?)
        (filter (fn [s] (<= (count s) 60)))

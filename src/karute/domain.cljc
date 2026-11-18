@@ -72,6 +72,7 @@
       (not (str/includes? (str (get-in doc [:mission :statement])) "労働から解放")) (conj "mission")
       (not (contains? registry-states (get-in doc [:provenance :registry_state]))) (conj "registry-state")
       (not= "health" (get-in p [:mission :domain_family])) (conj "domain-family")
+      (not (str/includes? (str (get-in p [:phi :rule])) "PHI")) (conj "phi-rule")
       (not (and (array-value? (:allowed_services money)) (every? #(contains? #{"murakumo" "kotobase"} %) (:allowed_services money)))) (conj "allowed-services")
       (not (true? (get-in p [:health_rule :fail_closed]))) (conj "health-rule")))))
 
