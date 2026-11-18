@@ -34,6 +34,22 @@ Tracking: [AWAI-3381](https://linear.app/kotobalabs/issue/AWAI-3381) (this unit)
 
 It does not diagnose and does not rate care; the physician decides.
 
+## SOAP summary draft through Murakumo (on device, AWAI-3396)
+
+After a SOAP check, Karute can ask Murakumo on the same device (`network.awai.murakumo`) for a 3–5 line summary draft. It uses the pinned `packages/awai-inference` client and Android plugin (`vendor/awai-inference`, awai-os `f52a243`, unchanged, the same pin as Rodo). Murakumo admits Karute by package allowlist plus signature match (awai-os AWAI-3395).
+
+The note is PHI, so it takes two confirmations:
+
+1. Karute first says that the note goes once to Murakumo on this device, and asks the person to confirm or cancel. Cancel gives nothing to Murakumo.
+2. Murakumo then opens its own native confirmation with the calling app and a prompt excerpt. Deny runs no inference.
+
+The rest of the flow:
+
+- The prompt holds the note (up to 6000 bytes, under Murakumo's 8192-byte limit), the missing sections and the out-of-range values. The model is told not to add findings, diagnoses, drugs or numbers.
+- The draft button is enabled only when Murakumo reports `installed`, `remote: false`, and the model both imported and loaded.
+- Outside Android the client refuses, and there is no remote fallback.
+- The draft is shown only, never stored or sent, and it is labelled as a draft from a small model that can be wrong. It is not a clinical record or a diagnosis.
+
 ## レセプト: claim draft (on device)
 
 `src/karute/rezept.cljc` ports the arithmetic of `cloud-itonami/iryo` at `18cf0f809a0df5b4ae9b444c21bdf89214f16f35` unchanged, and the tests reproduce iryo's own expected values:
@@ -66,7 +82,8 @@ Observations: 空レセプト, 病名なし, 主病名なし, more than one 主�
 ## Patient data
 
 - The SOAP note and the claim lines are PHI. They live only in the page's memory.
-- They are never stored, never handed to the Tauri host (which exposes only `awai_host_info`), and never sent.
+- They are never stored and never sent off the device.
+- The one way a note leaves the page is the Murakumo draft above. It goes through the Tauri command `awai_local_inference` to Murakumo on the same device, only after both confirmations. The host keeps nothing; its other command is `awai_host_info`.
 - The only network operations are the two public bot-status reads below, whose data categories are `request-ip` and `bot-id`.
 
 ## Bot status (public, per approval)
@@ -102,7 +119,7 @@ The APK is a debug test artifact. It is not a signed release, not an OTA and not
 
 - The app origin is static only: no SSR, BFF, app-origin API or inference proxy.
 - The CSP `connect-src` is exactly `https://bots.itonami.cloud`, the value the runtime derives from the descriptor (checked in the tests).
-- No on-device inference yet. A Murakumo draft, the signed karute → iryo consent capability and registry registration are later units under AWAI-3380.
+- Inference is on-device only, through Murakumo. The signed karute → iryo consent capability, the shared status domain and registry registration are later units under AWAI-3380.
 
 ## Legacy appview (etzhayyim, not part of the Karute app)
 

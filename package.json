@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "squint compile && node .agent-output/compiled/karute/build.mjs",
-    "test": "squint compile && node --test .agent-output/compiled/domain_test.mjs .agent-output/compiled/soap_test.mjs .agent-output/compiled/rezept_test.mjs",
+    "test": "squint compile && node --test .agent-output/compiled/domain_test.mjs .agent-output/compiled/soap_test.mjs .agent-output/compiled/rezept_test.mjs .agent-output/compiled/draft_test.mjs",
     "tauri": "tauri",
     "build:android": "npm run build && tauri android build --debug --apk --target aarch64",
     "build:android:x86": "npm run build && tauri android build --debug --apk --target x86_64"
