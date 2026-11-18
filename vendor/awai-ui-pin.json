@@ -1,0 +1,11 @@
+{
+  "repository": "network-awai/awai-os",
+  "sourceRevision": "ed68fba2bab86d5377eeaa89ad50a6339a43c6ae",
+  "sourcePath": "packages/awai-ui",
+  "package": "@awai/ui",
+  "version": "0.1.0",
+  "tarball": "vendor/awai-ui-0.1.0.tgz",
+  "sha256": "0aa2cd5b8f4ab87dff609e9a8cb6c5b3c247b74771cbb9e8109d3363c8740271",
+  "build": "npm ci && npm run build && npm pack, Squint0.16.214/esbuild0.28.2",
+  "registryPublished": false
+}

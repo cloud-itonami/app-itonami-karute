@@ -1,0 +1,32 @@
+{
+  "$schema": "https://schema.tauri.app/config/3",
+  "productName": "Karute",
+  "version": "0.1.0",
+  "identifier": "network.itonami.karute",
+  "build": {
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Karute",
+        "width": 480,
+        "height": 860,
+        "minWidth": 360,
+        "minHeight": 480,
+        "useHttpsScheme": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src https://bots.itonami.cloud ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+    }
+  },
+  "bundle": {
+    "active": false,
+    "android": {
+      "minSdkVersion": 35
+    }
+  }
+}

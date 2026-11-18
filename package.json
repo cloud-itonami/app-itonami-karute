@@ -1,0 +1,21 @@
+{
+  "name": "@itonami/karute",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "squint compile && node .agent-output/compiled/karute/build.mjs",
+    "test": "squint compile && node --test .agent-output/compiled/domain_test.mjs .agent-output/compiled/soap_test.mjs .agent-output/compiled/rezept_test.mjs",
+    "tauri": "tauri",
+    "build:android": "npm run build && tauri android build --debug --apk --target aarch64",
+    "build:android:x86": "npm run build && tauri android build --debug --apk --target x86_64"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "3.0.0-alpha.6",
+    "esbuild": "0.28.2",
+    "squint-cljs": "0.16.214"
+  },
+  "dependencies": {
+    "@awai/ui": "file:vendor/awai-ui-0.1.0.tgz"
+  }
+}

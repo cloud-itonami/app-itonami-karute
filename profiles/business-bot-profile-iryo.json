@@ -1,0 +1,80 @@
+{
+  "schema": "itonami.business-bot-profile.v1",
+  "provenance": {
+    "repository": "cloud-itonami/iryo",
+    "path": "manifest.edn",
+    "revision": "18cf0f809a0df5b4ae9b444c21bdf89214f16f35",
+    "registry_schema": "itonami.business-bot-profiles.v1",
+    "registry_state": "not-registered",
+    "registry_checked": "com-junkawasaki/root 90-docs/business/itonami-business-bot-profiles.json 7d484e131a8 has no iryo entry; https://itonami.cloud/api/open-business returned HTTP 500 on 2026-11-18",
+    "transformation": "authored from manifest.edn (actor id, role, gates G1-G7) in the shape of the registry profile_schema; runtime/money/audit/health copied from the registry template; not a registry copy. iryo is an actor, not an open-business blueprint, so the blueprint id is the actor id"
+  },
+  "mission": {
+    "statement": "全人類を労働から解放する",
+    "instrument": "governed business bots: one DO per (blueprint x assignment), hourly bounded loop, governor-vetted effects, append-only audit",
+    "origin_directive": "ADR-2609022000 (yui, 2026-09-02 owner directive)"
+  },
+  "profile": {
+    "profile_id": "bot-profile:iryo",
+    "kind": "business",
+    "business_blueprint": {
+      "id": "iryo",
+      "name": "医療 レセプト（診療報酬請求）",
+      "domain": "health/medical-billing",
+      "isic_rev5": "8620",
+      "repo": "https://github.com/cloud-itonami/iryo",
+      "governor": "iryo-billing-gates (G1-G7)",
+      "console": null,
+      "offer": "レセプト draft: 点数計算, 薬剤料, 一部負担金, 高額療養費, レセ電 records and integrity observations. The 保険医療機関 is the billing principal; submission is operator-gated and the 審査支払機関 decides.",
+      "self_registered": false,
+      "maturity_seed": false
+    },
+    "identity": {
+      "mail": null,
+      "note": "agentmail inbox optional; not provisioned yet"
+    },
+    "mission": {
+      "thesis": "全人類を労働から解放する — blueprint が担う経済領域を governed actor で自動化する",
+      "domain_goal": "billing-accuracy",
+      "domain_family": "health"
+    },
+    "runtime": {
+      "plane": "itonami-grok-bots (DO per bot)",
+      "model": "murakumo-main alias (KV resolved; never hardcode model ids)",
+      "interval_ms": 3600000,
+      "governor": "iryo-billing-gates (G1-G7)",
+      "registry_source": "https://itonami.cloud/api/open-business (DO re-fetches at launch)"
+    },
+    "money": {
+      "spending": "unique lending position only (trial LP, non-transferable, no on-chain token)",
+      "allowed_services": [
+        "murakumo",
+        "kotobase"
+      ],
+      "credit_bounds_micro_usdc": {
+        "min": 1000,
+        "max": 50000
+      },
+      "state": {
+        "assigned": false
+      }
+    },
+    "audit": {
+      "checkpoint": "append-only event ledger per DO",
+      "public_feed": "https://itonami.cloud/api/v1/grok-bots/bots/{bot_id}/activity",
+      "integrity": "sha256 / itonami-stable-json-v1 (measured on live events)"
+    },
+    "health_rule": {
+      "fail_closed": true,
+      "rule": "running is not healthy; read last_error + published vs failed + recent checkpoint"
+    },
+    "phi": {
+      "rule": "PHI (氏名・生年月日・SOAP 本文・保険者番号) never enters the bot plane, the public feed or the app origin; the bot works only on encrypted records and PHI-free references",
+      "basis": "cloud-itonami/karute AGENTS.md, cloud-itonami/iryo manifest.edn G2"
+    },
+    "provisioning": {
+      "state": "proposed",
+      "next_action": "register-in-canonical-registry (AWAI-3380 child)"
+    }
+  }
+}

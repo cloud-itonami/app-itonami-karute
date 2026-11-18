@@ -1,0 +1,5 @@
+# iryo test_compute_outpatient_basic と同じ値（seed master の点数を入力）
+行為 11 初診料 291
+行為 60 末梢血液一般検査 21
+行為 60 HbA1c 49
+病名 2型糖尿病 主
