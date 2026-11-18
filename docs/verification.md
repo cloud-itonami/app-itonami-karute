@@ -151,6 +151,7 @@ The note was set through the debug WebView's DevTools, because `adb input` canno
 
 ## Not verified
 
+- After the device run, a review added a notice for one edge case: Murakumo stops being ready between Karute's confirmation and 「Murakumo に渡す」. Before, the confirmation closed silently. That path is checked by `npm test` and `npm run build` only.
 - No physical device.
 - Murakumo's own qualification is not repeated here.
 - Network silence during generation is not captured at packet level. It rests on Murakumo having no INTERNET permission, and on Karute adding no network operation.

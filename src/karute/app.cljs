@@ -212,7 +212,8 @@
 (defn run-draft! []
   (let [text (:note @state) check (:soap @state)]
     (swap! state assoc :draft-confirm false)
-    (when (and check (= "ready" (:readiness @state)))
+    (if-not (and check (= "ready" (:readiness @state)))
+      (notice! (get (t :readiness) (or (:readiness @state) "status-unknown")))
       (try
         (let [p (draft/prompt text check)]
           (swap! state assoc :drafting true :draft nil) (render!)
