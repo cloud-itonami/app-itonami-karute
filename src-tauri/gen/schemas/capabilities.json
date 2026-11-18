@@ -1,0 +1,1 @@
+{"itonami-karute-local": {"identifier": "itonami-karute-local", "description": "Host identity only. No SQL, network, shell, filesystem, storage, inference or model credentials. Patient data stays in page memory.", "windows": ["main"], "permissions": ["allow-awai-host-info"], "local": true}}

@@ -1,4 +1,110 @@
-# app-karute — karute EMR の appview（Svelte SuperApp UI）
+# Karute
+
+Karute is the Awai app (Tauri v3, Android first) for Itonami's medical-family business bots. It bundles one bot profile per bot: `cloud-itonami-isic-8620` (clinical practice, 電子カルテ, `clinical-practice-governor`) and `iryo` (レセプト, 診療報酬請求). The profiles carry the Itonami mission 「全人類を労働から解放する」.
+
+On the device the app does the first step of each bot's work, with nothing sent and nothing stored:
+
+- **電子カルテ**: checks a SOAP note's structure and vital signs, and lists the problems written in A.
+- **レセプト**: drafts the claim arithmetic (点数, 薬剤料, 一部負担金, 高額療養費) and lists integrity observations.
+
+It can also read each bot's public status, once per approval.
+
+Tracking: [AWAI-3381](https://linear.app/kotobalabs/issue/AWAI-3381) (this unit), parent [AWAI-3380](https://linear.app/kotobalabs/issue/AWAI-3380). The pattern is the labor-family app Rodo (`network-awai/app-itonami-rodo`).
+
+## Bot profiles (proposed, not yet in the registry)
+
+- `profiles/business-bot-profile-8620.json` is authored from `cloud-itonami/app-itonami-cloud-itonami-isic-8620` `blueprint.edn` at `017b02d`.
+- `profiles/business-bot-profile-iryo.json` is authored from `cloud-itonami/iryo` `manifest.edn` at `18cf0f8`.
+- Both follow the `profile_schema` of the canonical registry `com-junkawasaki/root` `90-docs/business/itonami-business-bot-profiles.json`, but **neither is in it**. On 2026-11-18 that file (`7d484e1`, 29 profiles) had no medical entry, and the live registry `https://itonami.cloud/api/open-business` returned HTTP 500. Each profile records `provenance.registry_state: "not-registered"`, and the app shows that.
+- Registering them is a separate step under AWAI-3380.
+- Each profile adds a `phi` rule: PHI never enters the bot plane, the public feed or the app origin.
+- A profile that does not verify (schema, 40-hex revision, mission, `health` family, allowed services, fail-closed health) stops the view.
+
+## 電子カルテ: SOAP note check (on device)
+
+`src/karute/soap.cljc`:
+
+- **Sections.** It finds the S/O/A/P sections, written as `S:`, `(O)`, `【A】` or `P）`. Full-width letters and digits are folded first.
+- **Vital signs.** It reads 体温, 脈拍, 血圧, SpO2 and 呼吸数, and marks each value as one of:
+  - within a general adult reference range;
+  - outside it;
+  - implausible, for example 「BT365」, a likely typo.
+- **Problems.** It lists the problem names in A (`#1 …`, one per line, or 、-separated). 疑い marks a suspected one.
+- **Carry to レセプト.** 「病名をレセプトへ渡す」 copies those problems into the claim input in memory. This is the on-device form of the karute → iryo hand-off.
+
+It does not diagnose and does not rate care; the physician decides.
+
+## レセプト: claim draft (on device)
+
+`src/karute/rezept.cljc` ports the arithmetic of `cloud-itonami/iryo` at `18cf0f809a0df5b4ae9b444c21bdf89214f16f35` unchanged, and the tests reproduce iryo's own expected values:
+
+- 診療識別 → 区分 totals;
+- 薬剤料: 15 円以下は 1 点, otherwise 五捨五超入;
+- 1 点 = 10 円;
+- 一部負担金 rounded to 10 円;
+- 負担割合 from age;
+- 高額療養費 自己負担限度額 for 70 歳未満 ア〜オ and 70 歳以上 現役並み/一般/低所得, with the 外来 cap.
+
+Input is one line per item:
+
+```
+行為 <診療識別> <名称> <点数> [回数]
+薬 <診療識別 2x> <名称> <1 日分の薬価 円> <日数>
+材 <名称> <薬価 円> [数量]
+病名 <名称> [主|疑い]
+```
+
+Observations: 空レセプト, 病名なし, 主病名なし, 病名なし投薬, unknown 高額療養費 区分. They are observations, not adjudication; the clinic is the billing principal and the 審査支払機関 decides.
+
+**Limits:**
+- 点数 and 薬価 are taken as typed; there is no 厚労省 master in the app.
+- Outpatient only (no 入院, 食事 or 公費).
+- No レセ電 output and no submission.
+
+## Patient data
+
+- The SOAP note and the claim lines are PHI. They live only in the page's memory.
+- They are never stored, never handed to the Tauri host (which exposes only `awai_host_info`), and never sent.
+- The only network operations are the two public bot-status reads below, whose data categories are `request-ip` and `bot-id`.
+
+## Bot status (public, per approval)
+
+Same as Rodo:
+- `GET https://bots.itonami.cloud/v1/grok-bots/businesses`, then `GET /v1/grok-bots/bots/{bot_id}/activity` only for a bot id read from that list.
+- Each read goes through the canonical `kotoba-client-runtime.js` broker and opens its own approval dialog. Denying sends nothing.
+- Health is fail-closed: `running` alone is never healthy.
+- On 2026-11-18 neither medical bot was launched. Launching one creates a trial-LP credit position and needs separate operator approval.
+
+## Build and test
+
+Node 26/npm, pinned Squint 0.16.214, esbuild 0.28.2 and Tauri CLI 3.0.0-alpha.6.
+
+```sh
+npm ci
+npm test          # domain, SOAP and claim tests, with negative controls
+npm run build     # static files in dist/, with dist/release.json digests
+```
+
+The build fails if the canonical runtime or consent CSS differs from `vendor/PINS.json` (kotoba-lang/kotoba `91ed14c`), or if the Awai UI tarball or its files differ from `vendor/awai-ui-pin.json`.
+
+Android needs SDK 35+, NDK 27.0.12077973 and JDK 21, with `ANDROID_HOME`, `NDK_HOME` and `JAVA_HOME` set:
+
+```sh
+npm run build:android        # arm64 debug APK
+npm run build:android:x86    # x86_64 debug APK
+```
+
+The APK is a debug test artifact. It is not a signed release, not an OTA and not enrolled in Itonami Store. Verification is in [docs/verification.md](docs/verification.md).
+
+## Boundaries
+
+- The app origin is static only: no SSR, BFF, app-origin API or inference proxy.
+- The CSP `connect-src` is exactly `https://bots.itonami.cloud`, the value the runtime derives from the descriptor (checked in the tests).
+- No on-device inference yet. A Murakumo draft, the signed karute → iryo consent capability and registry registration are later units under AWAI-3380.
+
+## Legacy appview (etzhayyim, not part of the Karute app)
+
+`appview/etzhayyim-wasm-karute-karu7t3e/svelte` is the earlier Svelte UI carried over from `etzhayyim/root`. It calls a remote XRPC API, which the Kotoba end-user app contract does not allow. It is kept unchanged as migration inventory and is not built or shipped by Karute. What follows is the earlier description.
 
 **この repo が持っているのは UI だけである。** 電子カルテ（EMR）の
 ドメインモデル・lexicon・サーバ側実装は持っていない。ここに在るのは
@@ -14,7 +120,7 @@
 | tier | T1（`PROJECT.jsonld`） |
 | 出自 | `etzhayyim/root` の `60-apps/etzhayyim-project-karute`（`migration.edn` の `:source-revision be0c17bb`） |
 
-## 最近接 repo との境界
+### 最近接 repo との境界
 
 **`orgs/cloud-itonami/karute` が backend であり、契約の正本でもある。**
 FHIR R5 互換のドメイン（Patient / Encounter / SOAP / Observation /
@@ -27,7 +133,7 @@ Condition / MedicationRequest / ServiceRequest）と 11 本の lexicon
 （実測 2026-08-18）。repo は `cloud-itonami/karute` に改名済みで、GitHub
 リダイレクトは効くがローカルのパス参照は解決しない。
 
-## 何を呼んでいるか
+### 何を呼んでいるか
 
 `src/lib/api/karute-client.ts` が XRPC で叩く手続きは 16 本:
 
@@ -41,7 +147,7 @@ listMedications  listOrders  listDispenses  getChartSummary
 暗号化と同意は `com.etzhayyim.encrypted.record` / `.keyWrap` /
 `com.etzhayyim.consent.capability` を経由する。
 
-## 画面
+### 画面
 
 hash ベースの自前ルータ（`src/lib/router.svelte.ts`、SvelteKit は使わない）。
 mobile-first、`SuperAppTabBar` 固定下部、sidebar 無し。
@@ -54,7 +160,7 @@ mobile-first、`SuperAppTabBar` 固定下部、sidebar 無し。
 | `#/patients/:did/{soap,rx,vitals,order}` | SOAP / 処方 / バイタル / オーダ |
 | `#/orders` `#/pharmacy` `#/portal` `#/zaitaku` `#/talk` | オーダ / 薬局 / 患者ポータル / 在宅 / Talk |
 
-## PHI の不変条件（CRITICAL）
+### PHI の不変条件（CRITICAL）
 
 **plaintext の PHI を XRPC の body に直接載せてはいけない。**
 `@etzhayyim/sdk` の `encryptedWrite()` を通す。実装上これは
@@ -69,7 +175,7 @@ grep -rn "fetch(" src/ | awk -F: '{print $1}' | sort | uniq -c
 
 実測 2026-08-18: 2 件、いずれも `karute-client.ts`。**不変条件は成立している。**
 
-## この repo は今日 standalone では build できない
+### この repo は今日 standalone では build できない
 
 抽出時に monorepo への結合が 3 本残っており、`AGENTS.md` に書かれた
 `pnpm install` → `pnpm build` は**この repo 単体では通らない**。
@@ -91,6 +197,6 @@ repo 境界を跨いだまま残っている。
 変えるか vendor する、3 は fixture をこの repo に持ち込むか `ROOT` を
 repo root に付け替える。**まだどれも着手していない。**
 
-## ライセンス
+### ライセンス
 
 Apache-2.0 + etzhayyim Charter Compliance Rider v3.1（`NOTICE`）。

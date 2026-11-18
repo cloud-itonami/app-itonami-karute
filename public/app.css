@@ -1,0 +1,17 @@
+.app-header{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:12px}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.lead{margin:0}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;margin:0}
+dd{margin:0;overflow-wrap:anywhere}
+#events{padding-left:1.2em;display:grid;gap:8px}
+#events p{margin:0;overflow-wrap:anywhere}
+.event-error{color:var(--awai-color-error,#b3261e)}
+[data-verdict="healthy"]{font-weight:600}
+[data-verdict="unhealthy"],[data-verdict="not-launched"]{font-weight:600;color:var(--awai-color-error,#b3261e)}
+.checks{padding-left:1.2em;display:grid;gap:4px;margin:0}
+.checks [data-found="false"]{color:var(--awai-color-error,#b3261e);font-weight:600}
+.draft-text{white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
+textarea{width:100%;box-sizing:border-box}
+.patient{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.patient input,.patient select{width:100%;box-sizing:border-box}
+#sections,#vitals,#diagnoses,#kubun,#lines{margin:0}
