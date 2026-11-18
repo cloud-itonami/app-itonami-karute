@@ -104,3 +104,53 @@ These changes were verified by `npm test` and `npm run build`. The APK and emula
 - The 点数 and 薬価 values were typed in. Nothing is checked against the 厚労省 master.
 - The launched-bot path (activity feed) is covered only by the domain tests with real 7310 data, not on a device.
 - No physical device, no Store enrollment, no production signing, no registry entry, no bot launch.
+
+# Verification: SOAP summary draft through Murakumo (AWAI-3396, 2026-11-18)
+
+## Source and build
+
+- `npm test`: 35/35. The new tests cover:
+  - The prompt carries the note, the missing sections, the out-of-range values, and the instruction not to add findings.
+  - Prompt bounds stay under Murakumo's 8192-byte limit, and a note over 6000 bytes is refused.
+  - Readiness is fail-closed: a missing `remote` field counts as remote.
+  - Draft validation.
+  - Refusal outside Android, with no fallback.
+  - Denial is read from both a Tauri string and an Error.
+  - No network operation was added.
+- `npm run build`: the canonical runtime, Awai UI and `vendor/awai-inference` pins (awai-os `f52a243`, identical on awai-os main `ce7991c`) all match.
+
+| APK | sha256 |
+| -- | -- |
+| Karute universal debug (source `490dd31`) | `ce9591be0dd9fdfe8ea1b31178a0dd52648bb9d8429aecdd21056c3388d75fd4` |
+| Murakumo universal debug | `da016514b8c204bd634833a174bbac476e73960209cd5d4d62bfb1a5fd9d1c10` |
+
+The Murakumo APK was built from the AWAI-3395 branch head `435b0c5`, which adds Karute to the allowlist. Its `apps/murakumo` tree is the same as on awai-os main `ce7991c`; main's other changes in between touch only store and distribution files. It used the pinned llama.cpp archive, reused from a local copy whose digest `6d06723d…` matches `pins.json`, and arm64 native libraries built by `scripts/build-native.py`.
+
+Both builds ran under `forest-storage run` with `nice -n 10` and `CARGO_BUILD_JOBS=4`.
+
+## Device: one disposable AOSP emulator
+
+The emulator was `Awai_Karute_AWAI3381` on port 5590: Android 15 `AE3A.240806.019`, userdebug, no Google services, 4 GB RAM, started with `-wipe-data`. It was started after the host load fell below 20 and stopped right after the run.
+
+| Step | Result | Evidence |
+| -- | -- | -- |
+| Permission | `network.awai.permission.LOCAL_INFERENCE` shows `granted=true` for Karute, so the debug signatures match. | dumpsys |
+| Model | Pinned Qwen3 0.6B Q8_0 (sha256 `9465e63a…`), imported through Murakumo's 「Import from file」 and the system picker (real taps). Murakumo admitted it after its own digest check, and it loaded with a real tap on 「Load」. | `android-3396-m01-loaded.png` |
+| Readiness | After the SOAP check: 「端末内の推論を使えます。」, and the draft button is enabled. | — |
+| Karute confirmation, cancel | The confirmation names Murakumo and states that the note (PHI) goes once to it on this device. 「やめる」 shows 「やめました。記録は渡していません。」, and no Murakumo dialog appears. | `android-3396-k01-karute-confirm.png` |
+| Murakumo confirmation, deny | Murakumo's native dialog is titled 「Karute からの生成」 and shows the prompt excerpt. 「キャンセル」 shows 「下書きを中止しました。推論は実行していません。」. No llama.cpp lines appeared in logcat, and no draft is shown. | `android-3396-k02-murakumo-confirm.png`, `android-3396-k03-denied.png` |
+| Both allowed | The draft arrived in about 9 s, labelled 要約の下書き（Murakumo・端末内） and followed by the low-quality and not-a-record note. | `android-3396-k04-draft.png` |
+| PHI at rest | `grep` for 咽頭痛, 急性上気道炎 and カロナール found nothing in Karute's 46 data files or in Murakumo's 56 data files (model excluded). | `run-as` |
+
+The note was set through the debug WebView's DevTools, because `adb input` cannot type Japanese. Every button was a real tap, including both native confirmation buttons.
+
+## Findings
+
+- **The draft repeats only facts that are in the note**: the vitals, 咽頭発赤 and 高血圧症. It leaves out the chief complaint (咽頭痛, 鼻汁) and the plan, and it drops 急性上気道炎. This is one sample from a 0.6B model, and quality was not measured beyond it.
+- **English vital ids in the prompt.** The prompt lists out-of-range values with internal ids, for example `temperature 37.8`, which then appear in Murakumo's prompt excerpt. Using the Japanese labels there is a small follow-up.
+
+## Not verified
+
+- No physical device.
+- Murakumo's own qualification is not repeated here.
+- Network silence during generation is not captured at packet level. It rests on Murakumo having no INTERNET permission, and on Karute adding no network operation.
