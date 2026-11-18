@@ -5,5 +5,14 @@
   "files": {
     "kotoba-client-runtime.js": "5a950051c484a992caba0ad9edff780938648f9cade0b18f2d016812742ee6fb",
     "kotoba-client-consent.css": "eb1caab0619c5ca4428df637ae140bc3774582fa3f0b95a44bbd39b27b6b9086"
+  },
+  "awai-inference": {
+    "source": "network-awai/awai-os packages/awai-inference",
+    "revision": "f52a2439367baf15b5817836da933fee09d44ab5",
+    "transformation": "none",
+    "files": {
+      "client.js": "3b93cf3e62c788ff9ee7fbb80d15320d19e6feb6b94b821b4b8e0e9126fb84fe",
+      "android/network/awai/inference/InferenceClientPlugin.kt": "2900da7c69a8592bcd09957487488952a27c2ba40ab5592a2019d12e9ca090eb"
+    }
   }
 }

@@ -1,10 +1,11 @@
 (ns karute.app
-  (:require [karute.domain :as d] [karute.soap :as soap] [karute.rezept :as rezept] ["@awai/ui" :as ui] [clojure.string :as str]
+  (:require [karute.domain :as d] [karute.soap :as soap] [karute.rezept :as rezept] [karute.draft :as draft] ["@awai/inference-client" :refer [createInferenceClient]] ["@awai/ui" :as ui] [clojure.string :as str]
             ["@awai/client-runtime" :as runtime] ["@awai/profile-8620-text$default" :as profile-8620-text] ["@awai/profile-iryo-text$default" :as profile-iryo-text]))
 
 ;; PHI (the note and the レセプト lines) lives only in this atom: no storage, no send.
 (defonce state (atom {:locale "ja" :notice "" :assignment nil :events nil :busy false :read-at nil
                       :blueprint "cloud-itonami-isic-8620" :note "" :soap nil
+                      :readiness nil :draft-confirm false :drafting false :draft nil
                       :rezept-text "" :age "" :wari "" :kogaku "" :rezept nil}))
 (def node ui/node)
 (declare render!)
@@ -35,6 +36,15 @@
                        "plan-without-assessment" "P があるのに A に病名がありません" "empty-rezept" "算定する行がありません（空レセプト）" "no-diagnosis" "病名がありません"
                        "no-main-diagnosis" "主病名がありません" "multiple-main-diagnoses" "主病名が複数あります" "drug-without-diagnosis" "病名なしの投薬があります" "kogaku-kubun-unknown" "高額療養費の区分を確認できません"}
         :soap-note "記載の有無と一般的な成人の参考範囲を機械的に確かめるだけで、診断や診療の評価ではありません。判断は医師が行います。記録は端末の外へ送らず、保存もしません。"
+        :draft-title "要約の下書き（Murakumo・端末内）" :draft-btn "要約の下書きを作る（端末内の推論）" :open-murakumo "Murakumo を開く"
+        :draft-confirm-title "この端末の Murakumo に記録を渡しますか？"
+        :draft-confirm-text "SOAP 記録の本文（患者情報）を、この端末の Murakumo（network.awai.murakumo）に 1 回だけ渡して要約の下書きを作ります。端末の外へは送りません。Murakumo が次に自分の確認画面を出します。どちらかで拒否すると推論は実行されません。"
+        :draft-go "Murakumo に渡す" :draft-cancel "やめる" :draft-cancelled "やめました。記録は渡していません。"
+        :draft-note "小さなモデル（0.6B）の下書きで、誤りや記録にない内容を含むことがあります。診療録ではなく、診断でもありません。保存も送信もしません。必ず元の記録で確かめてください。"
+        :draft-denied "下書きを中止しました。推論は実行していません。" :draft-failed "下書きを作れません: "
+        :readiness {"ready" "端末内の推論を使えます。" "not-installed" "Murakumo が入っていないため使えません。" "refused-remote" "remote 推論の申告があるため使いません。"
+                    "status-unknown" "Murakumo の状態を確認できません。" "model-not-imported" "Murakumo にモデルが入っていません。Murakumo で取り込んでください。"
+                    "model-not-loaded" "Murakumo でモデルを読み込んでください。" "busy" "Murakumo が他の処理中です。" "unavailable" "この環境では端末内の推論を使えません（Android の Karute のみ）。"}
         :to-rezept "病名をレセプトへ渡す" :carried "A の病名をレセプトの入力に加えました（端末内）。"
         :rezept-title "レセプトの算定案（端末内）" :rezept-label "算定行（1 行 1 件）"
         :rezept-help "行為 <識別> <名称> <点数> [回数] ／ 薬 <識別> <名称> <1日分の薬価円> <日数> ／ 材 <名称> <薬価円> [数量] ／ 病名 <名称> [主|疑い]"
@@ -42,7 +52,7 @@
         :kubun "区分" :ten "点" :total-ten "総点数" :iryohi "総医療費" :ichibu "一部負担金（{w} 割）" :kogaku-limit "自己負担限度額" :pay "窓口負担" :yen "円"
         :lines "明細" :obs "観察（査定ではありません）" :no-obs "観察事項はありません。"
         :rezept-note "点数・薬価は入力どおりに使い、厚労省マスターとは照合していません。外来のみ（入院・食事・公費は対象外）。算定案であり、請求の送信はしません。請求の主体は保険医療機関で、審査は審査支払機関が行います。入力は端末の外へ送らず、保存もしません。"
-        :errors {"not-text" "入力を確認できません。" "note-empty" "記録を入力してください。" "note-too-long" "記録が 8000 bytes を超えています。"
+        :errors {"not-text" "入力を確認できません。" "note-empty" "記録を入力してください。" "note-too-long" "記録が 8000 bytes を超えています。" "note-too-long-for-draft" "下書きに使える記録は 6000 bytes までです。" "prompt-too-long" "下書きの指示が長すぎます。"
                  "input-empty" "算定行を入力してください。" "input-too-long" "6000 bytes を超えています。" "too-many-lines" "80 行を超えています。"
                  "line-shape" "{line} 行目の形を確認できません。" "age" "年齢は 0〜120 の整数で入力してください。" "wari" "負担割合は 0、0.1、0.2、0.3 のいずれかです。"}}
    :en {:title "Karute" :lead "Hand clinical-record and claim work to bots. Check those bots and your own records on your device."
@@ -70,6 +80,15 @@
                        "plan-without-assessment" "P is written but A names no problem" "empty-rezept" "no billable line (empty claim)" "no-diagnosis" "no diagnosis"
                        "no-main-diagnosis" "no main diagnosis" "multiple-main-diagnoses" "more than one main diagnosis" "drug-without-diagnosis" "a drug is billed without a diagnosis" "kogaku-kubun-unknown" "unknown high-cost category"}
         :soap-note "A mechanical check of which sections are written and of general adult reference ranges. It is not a diagnosis or a rating of care; the physician decides. The note never leaves the device and is not stored."
+        :draft-title "Summary draft (Murakumo, on device)" :draft-btn "Draft a summary (on-device inference)" :open-murakumo "Open Murakumo"
+        :draft-confirm-title "Give this note to Murakumo on this device?"
+        :draft-confirm-text "The SOAP note text (patient data) goes once to Murakumo (network.awai.murakumo) on this device to draft a summary. Nothing leaves the device. Murakumo then shows its own confirmation. Denying either one runs no inference."
+        :draft-go "Give it to Murakumo" :draft-cancel "Cancel" :draft-cancelled "Cancelled. The note was not given to Murakumo."
+        :draft-note "A draft from a small model (0.6B). It can be wrong or add things that are not in the note. It is not a clinical record or a diagnosis, and it is neither stored nor sent. Check it against the note."
+        :draft-denied "Draft cancelled. Inference did not run." :draft-failed "Could not draft: "
+        :readiness {"ready" "On-device inference is available." "not-installed" "Murakumo is not installed." "refused-remote" "Refused: the provider reports remote inference."
+                    "status-unknown" "Murakumo status is unknown." "model-not-imported" "Murakumo has no model. Import it in Murakumo."
+                    "model-not-loaded" "Load the model in Murakumo." "busy" "Murakumo is busy." "unavailable" "On-device inference is not available here (Karute on Android only)."}
         :to-rezept "Carry problems to the claim" :carried "Added the problems from A to the claim input (on device)."
         :rezept-title "Claim (レセプト) draft (on device)" :rezept-label "Claim lines (one per line)"
         :rezept-help "行為 <code> <name> <points> [count] / 薬 <code> <name> <daily price yen> <days> / 材 <name> <price yen> [amount] / 病名 <name> [主|疑い]"
@@ -77,7 +96,7 @@
         :kubun "Category" :ten "pt" :total-ten "Total points" :iryohi "Total cost" :ichibu "Patient share ({w}0%)" :kogaku-limit "High-cost cap" :pay "Patient pays" :yen "yen"
         :lines "Lines" :obs "Observations (not adjudication)" :no-obs "No observations."
         :rezept-note "Points and prices are used as entered and are not checked against the MHLW master. Outpatient only (no inpatient, meals or public funds). This is a draft; nothing is submitted. The clinic is the billing principal and the review body decides. The input never leaves the device and is not stored."
-        :errors {"not-text" "Input could not be read." "note-empty" "Enter the note." "note-too-long" "The note exceeds 8000 bytes."
+        :errors {"not-text" "Input could not be read." "note-empty" "Enter the note." "note-too-long" "The note exceeds 8000 bytes." "note-too-long-for-draft" "A draft takes notes up to 6000 bytes." "prompt-too-long" "The draft prompt is too long."
                  "input-empty" "Enter claim lines." "input-too-long" "Over 6000 bytes." "too-many-lines" "Over 80 lines."
                  "line-shape" "Line {line} could not be read." "age" "Enter the age as a whole number 0–120." "wari" "The share must be 0, 0.1, 0.2 or 0.3."}}})
 
@@ -183,8 +202,50 @@
 
 ;; ---- 電子カルテ: SOAP check ---------------------------------------------------
 
+(def inference (createInferenceClient))
+
+(defn refresh-readiness! []
+  (-> (.info inference)
+      (.then (fn [info] (swap! state assoc :readiness (draft/readiness info)) (render!)))
+      (.catch (fn [_] (swap! state assoc :readiness "unavailable") (render!)))))
+
+(defn run-draft! []
+  (let [text (:note @state) check (:soap @state)]
+    (swap! state assoc :draft-confirm false)
+    (if-not (and check (= "ready" (:readiness @state)))
+      (notice! (get (t :readiness) (or (:readiness @state) "status-unknown")))
+      (try
+        (let [p (draft/prompt text check)]
+          (swap! state assoc :drafting true :draft nil) (render!)
+          (-> (.generate inference #js{:prompt p :maxTokens draft/max-tokens})
+              (.then (fn [r] (swap! state assoc :draft (draft/draft r)) (notice! (t :draft-title))))
+              (.catch (fn [e] (let [msg (draft/error-text e)]
+                                (notice! (if (draft/denied? msg) (t :draft-denied) (str (t :draft-failed) (get (t :errors) msg msg)))))))
+              (.finally (fn [] (swap! state assoc :drafting false) (refresh-readiness!)))))
+        (catch :default e (notice! (error-text e)))))))
+
+(defn draft-section []
+  (let [rd (:readiness @state) dr (:draft @state)]
+    [:section {:id "draft"}
+     (when rd [:p {:id "readiness" :class "awai-caption"} (get (t :readiness) rd rd)])
+     (if (:draft-confirm @state)
+       [:div {:id "draft-confirm" :class "confirm" :role "alertdialog" :aria-labelledby "draft-confirm-title"}
+        [:p {:id "draft-confirm-title"} [:strong (t :draft-confirm-title)]]
+        [:p (t :draft-confirm-text)]
+        [:div {:class "actions"}
+         (ui/button (t :draft-go) {:attrs {:id "draft-go" :on-click run-draft!}})
+         (ui/button (t :draft-cancel) {:variant "tonal" :attrs {:id "draft-cancel" :on-click (fn [] (swap! state assoc :draft-confirm false) (notice! (t :draft-cancelled)))}})]]
+       [:div {:class "actions"}
+        (ui/button (t :draft-btn) {:variant "tonal" :attrs {:id "draft-btn" :disabled (or (:drafting @state) (not= "ready" rd))
+                                                             :on-click (fn [] (swap! state assoc :draft-confirm true) (render!))}})])
+     (when dr
+       [:div {:id "draft-result"}
+        [:p [:strong (t :draft-title)]]
+        [:p {:class "draft-text"} (:text dr)]
+        [:p {:class "awai-caption awai-muted"} (t :draft-note)]])]))
+
 (defn check-note! []
-  (try (swap! state assoc :soap (soap/check (:note @state))) (render!)
+  (try (swap! state assoc :soap (soap/check (:note @state)) :draft nil :draft-confirm false) (render!) (refresh-readiness!)
        (catch :default e (swap! state assoc :soap nil) (notice! (error-text e)))))
 
 (defn carry-to-rezept! []
@@ -199,7 +260,7 @@
     (ui/card
      (ui/heading 2 (t :soap-title))
      (ui/field {:id "note" :label (t :note-label)}
-       [:textarea {:rows "10" :value (:note @state) :on-input (fn [e] (swap! state assoc :note (.. e -target -value) :soap nil))}])
+       [:textarea {:rows "10" :value (:note @state) :on-input (fn [e] (swap! state assoc :note (.. e -target -value) :soap nil :draft nil :draft-confirm false))}])
      [:div {:class "actions"} (ui/button (t :soap-btn) {:variant "tonal" :attrs {:id "check-note" :on-click check-note!}})]
      (when r
        [:section {:id "soap-result"}
@@ -216,7 +277,8 @@
         (observations (:observations r))
         (when (seq (:diagnoses r))
           [:div {:class "actions"} (ui/button (t :to-rezept) {:attrs {:id "to-rezept" :on-click carry-to-rezept!}})])
-        [:p {:class "awai-caption awai-muted"} (t :soap-note)]]))))
+        [:p {:class "awai-caption awai-muted"} (t :soap-note)]
+        (draft-section)]))))
 
 ;; ---- レセプト: claim draft ----------------------------------------------------
 

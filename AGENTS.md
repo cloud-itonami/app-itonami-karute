@@ -4,7 +4,9 @@ Follow the workspace AGENTS.md, including the Kotoba end-user apps contract.
 
 - The common domain is `.cljc` (`src/karute/domain.cljc`, `soap.cljc`, `rezept.cljc`), and the UI is CLJS through Squint with the pinned `@awai/ui`. Tauri v3 is a thin host. Do not fork the UI components or the consent logic.
 - Every external request goes through the canonical client runtime broker with `each-operation` consent. Add a route only by declaring it in `karute.domain/operations`, and keep the CSP `connect-src` equal to `clientRuntimeConnectSrc` of the descriptor.
-- PHI (SOAP text, claim lines, names, birth dates, insurer numbers) stays in page memory. Do not store it, hand it to the Tauri host, put it in a URL, or send it. A feature that needs to move PHI needs its own declared operation, consent and review.
+- PHI (SOAP text, claim lines, names, birth dates, insurer numbers) stays in page memory. Do not store it, put it in a URL, or send it.
+- The only exception is the Murakumo summary draft. It hands the note to Murakumo on the same device through `awai_local_inference`, after Karute's own confirmation and Murakumo's native confirmation. Do not add a remote fallback or reuse that path for other data without its own consent and review.
+- A feature that needs to move PHI any other way needs its own declared operation, consent and review.
 - The claim arithmetic is a port of `cloud-itonami/iryo` at the revision named in `src/karute/rezept.cljc`. Change it only together with iryo, and keep the tests on iryo's expected values. Results are drafts and observations, never adjudication or submission.
 - The bundled profiles are proposed and not in the canonical registry. Do not mark them registered until `com-junkawasaki/root` contains them, then copy the registry entry and record its revision.
 - Health stays fail-closed. Do not launch or reconfigure live bots from this repository.

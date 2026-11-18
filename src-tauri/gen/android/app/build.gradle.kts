@@ -18,6 +18,7 @@ android {
     compileSdk = 37
     ndkVersion = "27.0.12077973"
     namespace = "network.itonami.karute"
+    sourceSets.getByName("main").java.srcDir("../../../../vendor/awai-inference/android")
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
         applicationId = "network.itonami.karute"
