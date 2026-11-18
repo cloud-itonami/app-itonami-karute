@@ -155,3 +155,17 @@ The note was set through the debug WebView's DevTools, because `adb input` canno
 - No physical device.
 - Murakumo's own qualification is not repeated here.
 - Network silence during generation is not captured at packet level. It rests on Murakumo having no INTERNET permission, and on Karute adding no network operation.
+
+# Verification: 16 KB-aligned native library (AWAI-3426, AWAI-3393 rollout, 2026-11-18)
+
+- **Change.** `src-tauri/build.rs` links Android targets with `-Wl,-z,max-page-size=16384`.
+- **No inset change.** `MainActivity` already pads the content view for system bars, display cutout and the IME, and `uiMode` is in `configChanges`. Under the rollout rule, no VM was run.
+- **Build.** A clean debug APK: `outputs/apk`, `intermediates/apk` and `intermediates/incremental` were deleted first. It was built with `nice -n 10` and `CARGO_BUILD_JOBS=4`, under the shared rollout `build.lock` (taken 05:43:55 UTC, released after the build), inside `forest-storage run`.
+
+| Check | Before (APK `ce9591be…`, AWAI-3396) | After |
+| -- | -- | -- |
+| APK | 29.5 MB | 29,580,724 bytes, sha256 `69a82a625bdb7401ff01b625dc11c7b1b908a97ebdd4264554fb6ded9f756eb0` |
+| `llvm-readelf -lW lib/arm64-v8a/libitonami_karute_lib.so` | 4 LOAD, all `Align 0x1000` | 4 LOAD, all `Align 0x4000` |
+| `zipalign -c -P 16 -v 4` | — | `libitonami_karute_lib.so (OK)`, verification successful |
+
+**Not established.** No 16 KB-page device or system image was used. The fix is shown by the ELF alignment only.
