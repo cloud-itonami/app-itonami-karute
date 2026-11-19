@@ -1,8 +1,10 @@
 (ns draft-test
-  (:require [karute.draft :as dr] [karute.soap :as s] [karute.domain :as d] ["node:test" :refer [test]] ["node:assert/strict" :as a] ["node:fs" :as fs]
+  (:require [karute.draft :as dr] [karute.soap :as s] [karute.domain :as d] [karute.rezept :as r] ["node:test" :refer [test]] ["node:assert/strict" :as a] ["node:fs" :as fs]
             ["../../vendor/awai-inference/client.js" :refer [createInferenceClient]]))
 
 (def note (fs/readFileSync "test/fixtures/soap-complete.txt" "utf8"))
+(def claim-text (fs/readFileSync "test/fixtures/rezept-outpatient.txt" "utf8"))
+(def claim (r/compute (r/parse claim-text) {:futan-wari 0.3}))
 (def gaps (fs/readFileSync "test/fixtures/soap-gaps.txt" "utf8"))
 (defn reason [f] (try (f) nil (catch :default e (:reason (ex-data e)))))
 (defn bytes [x] (.-length (.encode (js/TextEncoder.) x)))
@@ -53,6 +55,37 @@
   (fn [] (a/equal (dr/denied? (dr/error-text "local-inference-denied-or-unavailable")) true)
     (a/equal (dr/denied? (dr/error-text (js/Error. "inference-denied-or-unavailable"))) true)
     (a/equal (dr/denied? (dr/error-text (js/Error. "busy"))) false)))
+
+(test "the claim explanation prompt carries the computed amounts and a no-new-amounts rule"
+  (fn [] (let [p (dr/explanation-prompt claim-text claim)]
+    (a/ok (.includes p "361"))
+    (a/ok (.includes p "初診"))
+    (a/ok (.includes p "2型糖尿病"))
+    (a/ok (.includes p "加えないでください"))
+    (a/ok (.includes p "査定"))
+    (a/ok (.includes p "送信はしません")))
+    (let [with-obs (r/compute (r/parse "行為 12 再診料 75\n病名 感冒") {:futan-wari 0.3})
+          p (dr/explanation-prompt "行為 12 再診料 75\n病名 感冒" with-obs)]
+      (a/ok (.includes p "主病名がありません")))))
+
+(test "the explanation prompt stays bounded and refuses uncomputed input"
+  (fn [] (a/ok (<= (bytes (dr/explanation-prompt claim-text claim)) dr/max-prompt-bytes))
+    (a/ok (< dr/max-prompt-bytes 8192))
+    (a/equal (reason #(dr/explanation-prompt "" claim)) "input-empty")
+    (a/equal (reason #(dr/explanation-prompt 42 claim)) "not-text")
+    (a/equal (reason #(dr/explanation-prompt (apply str (repeat 700 "病名 感冒\n")) claim)) "input-too-long")
+    (a/equal (reason #(dr/explanation-prompt claim-text nil)) "no-computed-claim")
+    (a/equal (reason #(dr/explanation-prompt claim-text (assoc claim :status "input"))) "no-computed-claim")
+    (a/equal (reason #(dr/explanation-prompt claim-text (dissoc claim :total-ten))) "no-computed-claim")))
+
+(test "the explanation prompt carries no raw claim line, only aggregates and problem names"
+  (fn [] (let [p (dr/explanation-prompt claim-text claim)]
+    ;; Procedure and test names from the fixture's 行為 lines must not leak in:
+    ;; only their 区分 aggregate ("初診" etc.) and the 病名 may appear.
+    (a/equal (.includes p "初診料") false)
+    (a/equal (.includes p "末梢血液一般検査") false)
+    (a/equal (.includes p "HbA1c") false)
+    (a/ok (.includes p "2型糖尿病")))))
 
 (test "inference adds no network operation, and the app has no js->clj"
   (fn [] (a/deepEqual (mapv :operation (:operations (d/descriptor))) ["read-assignments" "read-activity"])

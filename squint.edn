@@ -1,1 +1,1 @@
-{:paths ["src" "build" "test"] :output-dir ".agent-output/compiled"}
+{:paths ["src" "build" "test" "packages/itonami-bot-status/src"] :output-dir ".agent-output/compiled"}

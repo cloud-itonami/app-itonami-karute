@@ -30,7 +30,7 @@ Tracking: [AWAI-3381](https://linear.app/kotobalabs/issue/AWAI-3381) (this unit)
   - outside it;
   - implausible, for example 「BT365」, a likely typo.
 - **Problems.** It lists the problem names in A (`#1 …`, one per line, or 、-separated). 疑い marks a suspected one.
-- **Carry to レセプト.** 「病名をレセプトへ渡す」 copies those problems into the claim input in memory. This is the on-device form of the karute → iryo hand-off.
+- **Carry to レセプト.** 「病名をレセプトへ渡す」 opens a consent envelope (`karute.handoff`) that names the exact problems, then writes them into the claim input in memory only after the person confirms there. This is the on-device form of the karute → iryo hand-off. The envelope is fresh for 5 minutes and refuses a changed A section; it is unsigned, and member-signed (Ed25519) verification is a later unit.
 
 It does not diagnose and does not rate care; the physician decides.
 
@@ -49,6 +49,12 @@ The rest of the flow:
 - The draft button is enabled only when Murakumo reports `installed`, `remote: false`, and the model both imported and loaded.
 - Outside Android the client refuses, and there is no remote fallback.
 - The draft is shown only, never stored or sent, and it is labelled as a draft from a small model that can be wrong. It is not a clinical record or a diagnosis.
+
+## Claim explanation draft through Murakumo (on device, AWAI-3389)
+
+After the claim is calculated, Karute can ask Murakumo on the same device for a 3–5 line explanation draft of that 算定案. It uses the same pinned `packages/awai-inference` client and the same two confirmations (Karute's own, then Murakumo's native one), with no remote fallback. This is a second inference operation with its own consent screen and its own result display: confirming the SOAP summary never confirms the claim explanation, and denying either one runs no inference.
+
+The prompt holds the computed aggregates (区分 totals, total points and yen, patient share and cap, observations) and the problem names from the claim input — not the raw claim lines. The model is told not to add amounts or names and not to judge the claim. The button is enabled only after a calculated draft exists and Murakumo reports ready. Like the summary, the explanation is shown only, never stored or sent, and it is not adjudication or a submission.
 
 ## レセプト: claim draft (on device)
 
@@ -83,7 +89,7 @@ Observations: 空レセプト, 病名なし, 主病名なし, more than one 主�
 
 - The SOAP note and the claim lines are PHI. They live only in the page's memory.
 - They are never stored and never sent off the device.
-- The one way a note leaves the page is the Murakumo draft above. It goes through the Tauri command `awai_local_inference` to Murakumo on the same device, only after both confirmations. The host keeps nothing; its other command is `awai_host_info`.
+- The ways page data leaves the page are the two Murakumo drafts above (SOAP summary, claim explanation). Each goes through the Tauri command `awai_local_inference` to Murakumo on the same device, only after its own two confirmations. The host keeps nothing; its other command is `awai_host_info`.
 - The only network operations are the two public bot-status reads below, whose data categories are `request-ip` and `bot-id`.
 
 ## Bot status (public, per approval)
@@ -119,7 +125,9 @@ The APK is a debug test artifact. It is not a signed release, not an OTA and not
 
 - The app origin is static only: no SSR, BFF, app-origin API or inference proxy.
 - The CSP `connect-src` is exactly `https://bots.itonami.cloud`, the value the runtime derives from the descriptor (checked in the tests).
-- Inference is on-device only, through Murakumo. The signed karute → iryo consent capability, the shared status domain and registry registration are later units under AWAI-3380.
+- Inference is on-device only, through Murakumo. The hand-off envelope verifies freshness and an unchanged A section in memory. Member-signed (Ed25519) verification is implemented in `karute.member-keys` against `karute.handoff/canonical` and covered with real signatures in the tests, but it is not yet called from the UI and no member key set ships here: the runtime path stays unsigned, and activating verification needs the keys and spec of `cloud-itonami/karute` MATURITY #8/#13.
+- The bot-state reads live in the shared package `packages/itonami-bot-status` (`itonami.bot-status`, AWAI-3389); `karute.domain` keeps Karute's blueprints, consent operations, descriptor and profile checks and delegates the reads. Moving Rodo onto it and publishing it are owner decisions under AWAI-3380.
+- Registry registration is a later unit under AWAI-3380.
 
 ## Legacy appview (etzhayyim, not part of the Karute app)
 
