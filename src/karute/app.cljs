@@ -1,12 +1,14 @@
 (ns karute.app
-  (:require [karute.domain :as d] [karute.soap :as soap] [karute.rezept :as rezept] [karute.draft :as draft] ["@awai/inference-client" :refer [createInferenceClient]] ["@awai/ui" :as ui] [clojure.string :as str]
+  (:require [karute.domain :as d] [karute.soap :as soap] [karute.rezept :as rezept] [karute.draft :as draft] [karute.handoff :as handoff] ["@awai/inference-client" :refer [createInferenceClient]] ["@awai/ui" :as ui] [clojure.string :as str]
             ["@awai/client-runtime" :as runtime] ["@awai/profile-8620-text$default" :as profile-8620-text] ["@awai/profile-iryo-text$default" :as profile-iryo-text]))
 
 ;; PHI (the note and the レセプト lines) lives only in this atom: no storage, no send.
 (defonce state (atom {:locale "ja" :notice "" :assignment nil :events nil :busy false :read-at nil
                       :blueprint "cloud-itonami-isic-8620" :note "" :soap nil
                       :readiness nil :draft-confirm false :drafting false :draft nil
-                      :rezept-text "" :age "" :wari "" :kogaku "" :rezept nil}))
+                      :handoff nil :handoff-confirm false
+                      :rezept-text "" :age "" :wari "" :kogaku "" :rezept nil
+                      :expl-confirm false :explaining false :expl nil}))
 (def node ui/node)
 (declare render!)
 
@@ -46,6 +48,14 @@
                     "status-unknown" "Murakumo の状態を確認できません。" "model-not-imported" "Murakumo にモデルが入っていません。Murakumo で取り込んでください。"
                     "model-not-loaded" "Murakumo でモデルを読み込んでください。" "busy" "Murakumo が他の処理中です。" "unavailable" "この環境では端末内の推論を使えません（Android の Karute のみ）。"}
         :to-rezept "病名をレセプトへ渡す" :carried "A の病名をレセプトの入力に加えました（端末内）。"
+        :handoff-title "病名の受け渡しの確認"
+        :handoff-text "A の病名をレセプトの入力に加えます。端末内のメモリでの受け渡しで、送信も保存もしません。署名はつきません（member 署名の検証は今後の対応です）。5 分以内に確定してください。"
+        :handoff-go "レセプトへ渡す" :handoff-cancel "やめる" :handoff-cancelled "やめました。病名は渡していません。"
+        :expl-title "算定案の説明の下書き（Murakumo・端末内）" :expl-btn "説明の下書きを作る（端末内の推論）"
+        :expl-confirm-title "この端末の Murakumo に算定案を渡しますか？"
+        :expl-confirm-text "算定結果の集計（区分・合計・負担額・観察）と病名を、この端末の Murakumo（network.awai.murakumo）に 1 回だけ渡して説明の下書きを作ります。元の算定行そのままは渡さず、端末の外へも送りません。Murakumo が次に自分の確認画面を出します。どちらかで拒否すると推論は実行されません。"
+        :expl-go "Murakumo に渡す" :expl-cancel "やめる" :expl-cancelled "やめました。算定案は渡していません。"
+        :expl-note "小さなモデル（0.6B）の下書きで、誤りや記録にない内容を含むことがあります。査定ではなく、請求の送信もしません。保存も送信もしません。必ず算定結果と元の記録で確かめてください。"
         :rezept-title "レセプトの算定案（端末内）" :rezept-label "算定行（1 行 1 件）"
         :rezept-help "行為 <識別> <名称> <点数> [回数] ／ 薬 <識別> <名称> <1日分の薬価円> <日数> ／ 材 <名称> <薬価円> [数量] ／ 病名 <名称> [主|疑い]"
         :age "年齢" :wari "負担割合（空欄は年齢から）" :kogaku "高額療養費の区分" :kogaku-none "なし" :rezept-btn "算定する"
@@ -54,7 +64,10 @@
         :rezept-note "点数・薬価は入力どおりに使い、厚労省マスターとは照合していません。外来のみ（入院・食事・公費は対象外）。算定案であり、請求の送信はしません。請求の主体は保険医療機関で、審査は審査支払機関が行います。入力は端末の外へ送らず、保存もしません。"
         :errors {"not-text" "入力を確認できません。" "note-empty" "記録を入力してください。" "note-too-long" "記録が 8000 bytes を超えています。" "note-too-long-for-draft" "下書きに使える記録は 6000 bytes までです。" "prompt-too-long" "下書きの指示が長すぎます。"
                  "input-empty" "算定行を入力してください。" "input-too-long" "6000 bytes を超えています。" "too-many-lines" "80 行を超えています。"
-                 "line-shape" "{line} 行目の形を確認できません。" "age" "年齢は 0〜120 の整数で入力してください。" "wari" "負担割合は 0、0.1、0.2、0.3 のいずれかです。"}}
+                 "line-shape" "{line} 行目の形を確認できません。" "age" "年齢は 0〜120 の整数で入力してください。" "wari" "負担割合は 0、0.1、0.2、0.3 のいずれかです。"
+                 "no-computed-claim" "先に「算定する」で算定案を計算してください。" "handoff-expired" "受け渡しの有効期限（5 分）が切れました。もう一度お試しください。"
+                 "handoff-changed" "A の病名が変わったため受け渡しを中止しました。もう一度確認してください。"
+                 "handoff-refused" "受け渡しを確認できませんでした。"}}
    :en {:title "Karute" :lead "Hand clinical-record and claim work to bots. Check those bots and your own records on your device."
         :mission "Mission" :blueprint "Economic domain" :governor "Governor" :money "Spending" :money-text "Only a {min}–{max} micro-USDC loan position (non-transferable, no on-chain token). Allowed services: {services}"
         :registry {"not-registered" "Not in the canonical registry yet (proposed profile)." "registered" "In the canonical registry."}
@@ -90,6 +103,14 @@
                     "status-unknown" "Murakumo status is unknown." "model-not-imported" "Murakumo has no model. Import it in Murakumo."
                     "model-not-loaded" "Load the model in Murakumo." "busy" "Murakumo is busy." "unavailable" "On-device inference is not available here (Karute on Android only)."}
         :to-rezept "Carry problems to the claim" :carried "Added the problems from A to the claim input (on device)."
+        :handoff-title "Confirm the problem hand-off"
+        :handoff-text "Adds the A problems to the claim input. In-memory only on this device: nothing is sent or stored. Unsigned (member-signature verification comes later). Confirm within 5 minutes."
+        :handoff-go "Carry to the claim" :handoff-cancel "Cancel" :handoff-cancelled "Cancelled. No problem was carried."
+        :expl-title "Claim explanation draft (Murakumo, on device)" :expl-btn "Draft an explanation (on-device inference)"
+        :expl-confirm-title "Give this claim draft to Murakumo on this device?"
+        :expl-confirm-text "The computed aggregates (sections, totals, patient share, observations) and the problem names go once to Murakumo (network.awai.murakumo) on this device to draft an explanation. The raw claim lines never go, and nothing leaves the device. Murakumo then shows its own confirmation. Denying either one runs no inference."
+        :expl-go "Give it to Murakumo" :expl-cancel "Cancel" :expl-cancelled "Cancelled. The claim draft was not given to Murakumo."
+        :expl-note "A draft from a small model (0.6B). It can be wrong or add things that are not in the draft. It is not adjudication, and nothing is submitted, stored or sent. Check it against the computed draft and the note."
         :rezept-title "Claim (レセプト) draft (on device)" :rezept-label "Claim lines (one per line)"
         :rezept-help "行為 <code> <name> <points> [count] / 薬 <code> <name> <daily price yen> <days> / 材 <name> <price yen> [amount] / 病名 <name> [主|疑い]"
         :age "Age" :wari "Patient share (blank = from age)" :kogaku "High-cost category" :kogaku-none "none" :rezept-btn "Calculate"
@@ -98,7 +119,10 @@
         :rezept-note "Points and prices are used as entered and are not checked against the MHLW master. Outpatient only (no inpatient, meals or public funds). This is a draft; nothing is submitted. The clinic is the billing principal and the review body decides. The input never leaves the device and is not stored."
         :errors {"not-text" "Input could not be read." "note-empty" "Enter the note." "note-too-long" "The note exceeds 8000 bytes." "note-too-long-for-draft" "A draft takes notes up to 6000 bytes." "prompt-too-long" "The draft prompt is too long."
                  "input-empty" "Enter claim lines." "input-too-long" "Over 6000 bytes." "too-many-lines" "Over 80 lines."
-                 "line-shape" "Line {line} could not be read." "age" "Enter the age as a whole number 0–120." "wari" "The share must be 0, 0.1, 0.2 or 0.3."}}})
+                 "line-shape" "Line {line} could not be read." "age" "Enter the age as a whole number 0–120." "wari" "The share must be 0, 0.1, 0.2 or 0.3."
+                 "no-computed-claim" "Calculate the draft with “Calculate” first." "handoff-expired" "The hand-off expired (5 minutes). Try again."
+                 "handoff-changed" "The hand-off stopped because the A problems changed. Check again."
+                 "handoff-refused" "The hand-off could not be verified."}}})
 
 (defn t [k] (get-in copy [(:locale @state) k]))
 (defn fmt [k values] (reduce (fn [s [key v]] (str/replace s (str "{" (name key) "}") (str v))) (t k) values))
@@ -245,15 +269,81 @@
         [:p {:class "awai-caption awai-muted"} (t :draft-note)]])]))
 
 (defn check-note! []
-  (try (swap! state assoc :soap (soap/check (:note @state)) :draft nil :draft-confirm false) (render!) (refresh-readiness!)
+  (try (swap! state assoc :soap (soap/check (:note @state)) :draft nil :draft-confirm false :handoff nil :handoff-confirm false) (render!) (refresh-readiness!)
        (catch :default e (swap! state assoc :soap nil) (notice! (error-text e)))))
+
+(defn handoff-refusal-text [reason]
+  (get (t :errors) (if (= "handoff-expired" reason) "handoff-expired"
+                       (if (= "handoff-changed" reason) "handoff-changed" "handoff-refused"))
+       (t :handoff-cancelled)))
 
 (defn carry-to-rezept! []
   (when-let [dx (seq (get-in @state [:soap :diagnoses]))]
-    (let [current (str/trim (:rezept-text @state))
-          lines (rezept/diagnosis-lines dx)]
-      (swap! state assoc :rezept-text (if (str/blank? current) lines (str current "\n" lines)) :rezept nil :blueprint "iryo" :assignment nil :events nil :read-at nil)
-      (notice! (t :carried)))))
+    (try (swap! state assoc :handoff (handoff/make dx (js/Date.now)) :handoff-confirm true) (render!)
+         (catch :default e (swap! state assoc :handoff nil :handoff-confirm false)
+           (notice! (let [r (error-reason e)]
+                      (if (and (string? r) (str/starts-with? r "handoff-")) (handoff-refusal-text r) (error-text e))))))))
+
+(defn confirm-carry! []
+  (let [env (:handoff @state) dx (get-in @state [:soap :diagnoses]) now (js/Date.now)
+        bad (or (handoff/problem env now)
+                (when-not (handoff/matches? env dx) "handoff-changed"))]
+    (swap! state assoc :handoff-confirm false)
+    (if bad
+      (do (swap! state assoc :handoff nil) (notice! (handoff-refusal-text bad)))
+      (let [current (str/trim (:rezept-text @state))
+            lines (rezept/diagnosis-lines (:diagnoses env))]
+        (swap! state assoc :rezept-text (if (str/blank? current) lines (str current "\n" lines))
+               :rezept nil :handoff nil :expl nil :expl-confirm false
+               :blueprint "iryo" :assignment nil :events nil :read-at nil)
+        (notice! (t :carried))))))
+
+(defn handoff-section []
+  (when (:handoff-confirm @state)
+    [:div {:id "handoff-confirm" :class "confirm" :role "alertdialog" :aria-labelledby "handoff-confirm-title"}
+     [:p {:id "handoff-confirm-title"} [:strong (t :handoff-title)]]
+     (when-let [env (:handoff @state)]
+       [:ul {:id "handoff-names"}
+        (map (fn [d] [:li (str (:name d) (when (:main d) (str "（" (t :main) "）")) (when (:suspected d) (str "（" (t :suspected) "）")))]) (:diagnoses env))])
+     [:p (t :handoff-text)]
+     [:div {:class "actions"}
+      (ui/button (t :handoff-go) {:attrs {:id "handoff-go" :on-click confirm-carry!}})
+      (ui/button (t :handoff-cancel) {:variant "tonal" :attrs {:id "handoff-cancel" :on-click (fn [] (swap! state assoc :handoff nil :handoff-confirm false) (notice! (t :handoff-cancelled)))}})]]))
+
+(defn run-expl! []
+  (let [text (:rezept-text @state) result (:rezept @state)]
+    (swap! state assoc :expl-confirm false)
+    (if-not (and result (= "ready" (:readiness @state)))
+      (notice! (get (t :readiness) (or (:readiness @state) "status-unknown")))
+      (try
+        (let [p (draft/explanation-prompt text result)]
+          (swap! state assoc :explaining true :expl nil) (render!)
+          (-> (.generate inference #js{:prompt p :maxTokens draft/max-tokens})
+              (.then (fn [r] (swap! state assoc :expl (draft/draft r)) (notice! (t :expl-title))))
+              (.catch (fn [e] (let [msg (draft/error-text e)]
+                                (notice! (if (draft/denied? msg) (t :draft-denied) (str (t :draft-failed) (get (t :errors) msg msg)))))))
+              (.finally (fn [] (swap! state assoc :explaining false) (refresh-readiness!)))))
+        (catch :default e (notice! (error-text e)))))))
+
+(defn expl-section []
+  (let [rd (:readiness @state) ex (:expl @state)]
+    [:section {:id "expl"}
+     (when rd [:p {:id "expl-readiness" :class "awai-caption"} (get (t :readiness) rd rd)])
+     (if (:expl-confirm @state)
+       [:div {:id "expl-confirm" :class "confirm" :role "alertdialog" :aria-labelledby "expl-confirm-title"}
+        [:p {:id "expl-confirm-title"} [:strong (t :expl-confirm-title)]]
+        [:p (t :expl-confirm-text)]
+        [:div {:class "actions"}
+         (ui/button (t :expl-go) {:attrs {:id "expl-go" :on-click run-expl!}})
+         (ui/button (t :expl-cancel) {:variant "tonal" :attrs {:id "expl-cancel" :on-click (fn [] (swap! state assoc :expl-confirm false) (notice! (t :expl-cancelled)))}})]]
+       [:div {:class "actions"}
+        (ui/button (t :expl-btn) {:variant "tonal" :attrs {:id "expl-btn" :disabled (or (:explaining @state) (not= "ready" rd) (nil? (:rezept @state)))
+                                                           :on-click (fn [] (swap! state assoc :expl-confirm true) (render!))}})])
+     (when ex
+       [:div {:id "expl-result"}
+        [:p [:strong (t :expl-title)]]
+        [:p {:class "draft-text"} (:text ex)]
+        [:p {:class "awai-caption awai-muted"} (t :expl-note)]])]))
 
 (defn soap-card []
   (let [r (:soap @state)]
@@ -277,6 +367,7 @@
         (observations (:observations r))
         (when (seq (:diagnoses r))
           [:div {:class "actions"} (ui/button (t :to-rezept) {:attrs {:id "to-rezept" :on-click carry-to-rezept!}})])
+        (handoff-section)
         [:p {:class "awai-caption awai-muted"} (t :soap-note)]
         (draft-section)]))))
 
@@ -290,7 +381,7 @@
      :kogaku-kubun (when-not (= "" kogaku) kogaku)}))
 
 (defn calculate! []
-  (try (swap! state assoc :rezept (rezept/compute (rezept/parse (:rezept-text @state)) (patient-input))) (render!)
+  (try (swap! state assoc :rezept (rezept/compute (rezept/parse (:rezept-text @state)) (patient-input)) :expl nil :expl-confirm false) (render!) (refresh-readiness!)
        (catch :default e (swap! state assoc :rezept nil) (notice! (error-text e)))))
 
 (defn rezept-card []
@@ -321,6 +412,7 @@
         [:p [:strong (t :lines)]]
         [:ol {:id "lines"} (map (fn [l] [:li (str (:name l) "（" (:kubun l) "） " (:unit-ten l) " × " (:count l) " = " (:ten l) " " (t :ten))]) (:lines r))]
         (observations (:observations r))
+        (expl-section)
         [:p {:class "awai-caption awai-muted"} (t :rezept-note)]]))))
 
 (defn render! []
