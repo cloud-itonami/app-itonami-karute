@@ -5,9 +5,10 @@
     "path": "manifest.edn",
     "revision": "18cf0f809a0df5b4ae9b444c21bdf89214f16f35",
     "registry_schema": "itonami.business-bot-profiles.v1",
-    "registry_state": "not-registered",
-    "registry_checked": "com-junkawasaki/root 90-docs/business/itonami-business-bot-profiles.json 7d484e131a8 has no iryo entry; https://itonami.cloud/api/open-business returned HTTP 500 on 2026-11-18",
-    "transformation": "authored from manifest.edn (actor id, role, gates G1-G7) in the shape of the registry profile_schema; runtime/money/audit/health copied from the registry template; not a registry copy. iryo is an actor, not an open-business blueprint, so the blueprint id is the actor id"
+    "registry_state": "registered",
+    "registry_checked": "registered in com-junkawasaki/root@4f23033b6300; live API https://itonami.cloud/api/open-business -> 503 on 2026-11-22",
+    "transformation": "registry copy of com-junkawasaki/root@4f23033b6300 (was: authored from manifest.edn (actor id, role, gates G1-G7) in the shape of the registry profile_schema; runtime/money/audit/health copied from the registry template; not a registry copy. iryo is an actor, not an open-business blueprint, so the blueprint id is the actor id)",
+    "registry_revision": "4f23033b63008df4cc722968fda6624c87353c91"
   },
   "mission": {
     "statement": "全人類を労働から解放する",
@@ -19,13 +20,14 @@
     "kind": "business",
     "business_blueprint": {
       "id": "iryo",
-      "name": "医療 レセプト（診療報酬請求）",
+      "name": "Iryo Medical Billing Engine",
       "domain": "health/medical-billing",
       "isic_rev5": "8620",
-      "repo": "https://github.com/cloud-itonami/iryo",
-      "governor": "iryo-billing-gates (G1-G7)",
-      "console": null,
-      "offer": "レセプト draft: 点数計算, 薬剤料, 一部負担金, 高額療養費, レセ電 records and integrity observations. The 保険医療機関 is the billing principal; submission is operator-gated and the 審査支払機関 decides.",
+      "repo": "https://github.com/cloud-itonami/app-itonami-iryo",
+      "repo_path": "/gftdcojp/app-itonami-iryo",
+      "governor": "medical-billing-governor",
+      "console": "https://iryo.itonami.cloud",
+      "offer": "Governed medical billing: rezept point calculation, receden generation, and FHIR Claim output as the billing counterpart to the karute EMR.",
       "self_registered": false,
       "maturity_seed": false
     },
@@ -34,15 +36,15 @@
       "note": "agentmail inbox optional; not provisioned yet"
     },
     "mission": {
-      "thesis": "全人類を労働から解放する — blueprint が担う経済領域を governed actor で自動化する",
-      "domain_goal": "billing-accuracy",
+      "thesis": "受診の機会損失をなくし、医療事務の正確性と速度を人間の確認を中心に保ちながら自動化する",
+      "domain_goal": "care-access-and-billing-accuracy",
       "domain_family": "health"
     },
     "runtime": {
       "plane": "itonami-grok-bots (DO per bot)",
       "model": "murakumo-main alias (KV resolved; never hardcode model ids)",
       "interval_ms": 3600000,
-      "governor": "iryo-billing-gates (G1-G7)",
+      "governor": "medical-billing-governor",
       "registry_source": "https://itonami.cloud/api/open-business (DO re-fetches at launch)"
     },
     "money": {
@@ -69,12 +71,18 @@
       "rule": "running is not healthy; read last_error + published vs failed + recent checkpoint"
     },
     "phi": {
-      "rule": "PHI (氏名・生年月日・SOAP 本文・保険者番号) never enters the bot plane, the public feed or the app origin; the bot works only on encrypted records and PHI-free references",
-      "basis": "cloud-itonami/karute AGENTS.md, cloud-itonami/iryo manifest.edn G2"
+      "rule": "請求に必要な最小限の診療情報だけを扱い、患者を特定できる情報は暗号化して保存する。平文の PHI を記録・転送・学習に使わない。",
+      "stores": [
+        "encrypted_billing_records"
+      ],
+      "excludes": [
+        "plaintext_phi",
+        "model_training_on_phi"
+      ]
     },
     "provisioning": {
-      "state": "proposed",
-      "next_action": "register-in-canonical-registry (AWAI-3380 child)"
+      "state": "blueprint-only",
+      "next_action": "operator approval needed to launch (POST /v1/grok-bots)"
     }
   }
 }
