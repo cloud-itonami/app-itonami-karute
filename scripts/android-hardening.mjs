@@ -5,8 +5,13 @@
 //     android:dataExtractionRules="@xml/data_extraction_rules" (Android 12+ honours only the rules file,
 //     for cloud backup and device-to-device transfer; minSdk is 35).
 //   - res/xml/data_extraction_rules.xml: every domain excluded from cloud-backup and device-transfer.
-//   - MainActivity.kt: FLAG_SECURE before the content view (no screenshots, a blank Recents thumbnail)
-//     and setRecentsScreenshotEnabled(false).
+//   - MainActivity.kt: FLAG_SECURE before the content view (no screenshots, recording, casting or Recents
+//     thumbnail), gated by exactly `if (!BuildConfig.DEBUG)` so that App QA can take evidence screenshots
+//     from debug builds only; release builds always set it (Owner bot, 2026-11-22). The check refuses any
+//     other condition and any clearFlags. setRecentsScreenshotEnabled(false) stays on in both variants: it
+//     only blanks the Recents thumbnail and does not block adb screencap, so it does not get in QA's way.
+//   - scripts/android-apk-check.mjs checks the built APK (release: not debuggable, the flag set
+//     unconditionally in MainActivity.onCreate).
 // usage: node scripts/android-hardening.mjs check|apply [gen/android dir]
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -25,11 +30,15 @@ ${excludes}
     </device-transfer>
 </data-extraction-rules>
 `;
-const SECURE_LINES = [
-  "    // PHI stays out of screenshots, screen recording and the Recents thumbnail (KOTOBA-159).",
-  "    window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)",
+const SET_SECURE = "window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)";
+export const SECURE_BLOCK = [
+  "    // PHI stays out of screenshots, screen recording, casting and the Recents thumbnail (KOTOBA-159).",
+  "    // Debug builds only skip it, so App QA can take evidence screenshots; release builds always set it.",
+  "    if (!BuildConfig.DEBUG) {",
+  `      ${SET_SECURE}`,
+  "    }",
   "    setRecentsScreenshotEnabled(false)",
-];
+].join("\n");
 
 export const files = (gen) => ({
   manifest: path.join(gen, "app/src/main/AndroidManifest.xml"),
@@ -64,10 +73,17 @@ export function hardeningProblems({ manifest, rules, activity }) {
       const secure = onCreate.indexOf("WindowManager.LayoutParams.FLAG_SECURE");
       const superCall = onCreate.indexOf("super.onCreate(");
       if (secure < 0) problems.push("MainActivity: FLAG_SECURE missing");
-      else if (superCall >= 0 && secure > superCall) problems.push("MainActivity: FLAG_SECURE must be set before super.onCreate");
-      if (!/setRecentsScreenshotEnabled\(false\)/.test(onCreate)) problems.push("MainActivity: setRecentsScreenshotEnabled(false) missing");
+      else {
+        if (superCall >= 0 && secure > superCall) problems.push("MainActivity: FLAG_SECURE must be set before super.onCreate");
+        // The only allowed form: the set call alone inside exactly `if (!BuildConfig.DEBUG) { ... }`.
+        const gated = new RegExp(`\\n    if \\(!BuildConfig\\.DEBUG\\) \\{\\n      ${SET_SECURE.replace(/[.()]/g, "\\$&")}\\n    \\}\\n`);
+        if (!gated.test(onCreate)) problems.push("MainActivity: FLAG_SECURE must be set inside exactly `if (!BuildConfig.DEBUG) { ... }`");
+        if (onCreate.split("FLAG_SECURE").length !== 3) problems.push("MainActivity: FLAG_SECURE must be set exactly once");
+      }
+      if (!/\n    setRecentsScreenshotEnabled\(false\)\n/.test(onCreate)) problems.push("MainActivity: setRecentsScreenshotEnabled(false) missing or conditional");
     }
     if (!/^import android\.view\.WindowManager$/m.test(activity)) problems.push("MainActivity: import android.view.WindowManager missing");
+    if (/clearFlags\s*\(|FLAG_SECURE\.inv\(\)|setRecentsScreenshotEnabled\(true\)/.test(activity)) problems.push("MainActivity: something turns the protection off again");
   }
   return problems;
 }
@@ -82,9 +98,13 @@ export function applyHardening({ manifest, activity }) {
   let nextActivity = activity;
   if (!/^import android\.view\.WindowManager$/m.test(nextActivity)) nextActivity = nextActivity.replace(/^import android\.view\.View$/m, "import android.view.View\nimport android.view.WindowManager");
   if (!/^import android\.view\.WindowManager$/m.test(nextActivity)) nextActivity = nextActivity.replace(/^(package [^\n]+\n)/, "$1\nimport android.view.WindowManager\n");
-  if (!nextActivity.includes("WindowManager.LayoutParams.FLAG_SECURE")) {
-    nextActivity = nextActivity.replace(/(override fun onCreate\([^)]*\)\s*\{\n)/, `$1${SECURE_LINES.join("\n")}\n`);
-  }
+  // Drop any earlier form (ungated, or the old comment), then insert the one allowed block.
+  nextActivity = nextActivity
+    .replace(/\n    \/\/ PHI stays out of [^\n]*(?:\n    \/\/ Debug builds only[^\n]*)?/g, "")
+    .replace(/\n    if \(!BuildConfig\.DEBUG\) \{\n      window\.setFlags\([^\n]*\n    \}/g, "")
+    .replace(/\n    window\.setFlags\(WindowManager\.LayoutParams\.FLAG_SECURE[^\n]*/g, "")
+    .replace(/\n    setRecentsScreenshotEnabled\(false\)/g, "");
+  nextActivity = nextActivity.replace(/(override fun onCreate\([^)]*\)\s*\{\n)/, `$1${SECURE_BLOCK}\n`);
   return { manifest: nextManifest, rules: RULES_XML, activity: nextActivity };
 }
 

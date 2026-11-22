@@ -13,7 +13,7 @@
 (declare render!)
 
 (def copy
-  {:ja {:title "Karute" :lead "電子カルテとレセプトの仕事を bot に任せる。その bot の状態と、手元の記録の確認を、端末の中で行う。"
+  {:ja {:title "Karute" :screen-note "患者の情報を守るため、この app は画面の撮影と共有ができません" :lead "電子カルテとレセプトの仕事を bot に任せる。その bot の状態と、手元の記録の確認を、端末の中で行う。"
         :mission "使命" :blueprint "担当する経済領域" :governor "統制" :money "使えるお金" :money-text "{min}〜{max} micro-USDC の貸付枠のみ（譲渡不可・オンチェーン token なし）。使える先: {services}"
         :registry {"not-registered" "正本 registry には未登録です（提案中の profile）。" "registered" "正本 registry に登録済み。"}
         :phi "患者情報（PHI）" :read-assignments "bot の状態を取得" :read-activity "活動を取得" :language "言語"
@@ -68,7 +68,7 @@
                  "no-computed-claim" "先に「算定する」で算定案を計算してください。" "handoff-expired" "受け渡しの有効期限（5 分）が切れました。もう一度お試しください。"
                  "handoff-changed" "A の病名が変わったため受け渡しを中止しました。もう一度確認してください。"
                  "handoff-refused" "受け渡しを確認できませんでした。"}}
-   :en {:title "Karute" :lead "Hand clinical-record and claim work to bots. Check those bots and your own records on your device."
+   :en {:title "Karute" :screen-note "To protect patient information, this app cannot be screenshotted or shared on screen." :lead "Hand clinical-record and claim work to bots. Check those bots and your own records on your device."
         :mission "Mission" :blueprint "Economic domain" :governor "Governor" :money "Spending" :money-text "Only a {min}–{max} micro-USDC loan position (non-transferable, no on-chain token). Allowed services: {services}"
         :registry {"not-registered" "Not in the canonical registry yet (proposed profile)." "registered" "In the canonical registry."}
         :phi "Patient data (PHI)" :read-assignments "Read bot status" :read-activity "Read activity" :language "Language"
@@ -426,6 +426,8 @@
                 [:option {:value "ja" :selected (= "ja" (:locale @state))} "日本語"] [:option {:value "en" :selected (= "en" (:locale @state))} "English"]])]
             (ui/status (:notice @state) {:id "notice"})
             [:main {:id "main"}
+             ;; FLAG_SECURE (release builds): say so where the user reads about the app (Owner bot, KOTOBA-159).
+             [:p {:id "screen-note" :class "awai-caption awai-muted"} (t :screen-note)]
              (if-not profile-ok
                [:p {:id "profile-invalid"} (t :profile-invalid)]
                (ui/stack

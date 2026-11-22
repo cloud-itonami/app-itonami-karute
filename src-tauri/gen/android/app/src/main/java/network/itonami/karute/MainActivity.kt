@@ -11,8 +11,11 @@ import kotlin.math.max
 // Platform geometry only: Android owns system bars, cutouts and the keyboard.
 class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
-    // PHI stays out of screenshots, screen recording and the Recents thumbnail (KOTOBA-159).
-    window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+    // PHI stays out of screenshots, screen recording, casting and the Recents thumbnail (KOTOBA-159).
+    // Debug builds only skip it, so App QA can take evidence screenshots; release builds always set it.
+    if (!BuildConfig.DEBUG) {
+      window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+    }
     setRecentsScreenshotEnabled(false)
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)

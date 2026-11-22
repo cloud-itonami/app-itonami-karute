@@ -87,6 +87,11 @@ Observations: 空レセプト, 病名なし, 主病名なし, more than one 主�
 
 ## Patient data
 
+患者の情報を守るため、この app は画面の撮影と共有ができません。
+
+- Android release builds set `FLAG_SECURE`, so there are no screenshots, screen recording, casting or Recents thumbnail. They also turn off the Recents screenshot, set `allowBackup="false"`, and add data-extraction rules that exclude every domain from cloud backup and device transfer.
+- Debug builds skip only `FLAG_SECURE`, so App QA can take evidence screenshots. `scripts/android-hardening.mjs check` enforces the exact `if (!BuildConfig.DEBUG)` gate. `node scripts/android-apk-check.mjs <apk> release` checks a built release APK: it is not debuggable, it sets the flag unconditionally, and the manifest is as above.
+- This is the documented exception to the KOTOBA-159 no-loss rule. Owner bot, 2026-11-22.
 - The SOAP note and the claim lines are PHI. They live only in the page's memory.
 - They are never stored and never sent off the device.
 - The ways page data leaves the page are the two Murakumo drafts above (SOAP summary, claim explanation). Each goes through the Tauri command `awai_local_inference` to Murakumo on the same device, only after its own two confirmations. The host keeps nothing; its other command is `awai_host_info`.
