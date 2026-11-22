@@ -9,6 +9,7 @@ Follow the workspace AGENTS.md, including the Kotoba end-user apps contract.
 - A feature that needs to move PHI any other way needs its own declared operation, consent and review.
 - The claim arithmetic is a port of `cloud-itonami/iryo` at the revision named in `src/karute/rezept.cljc`. Change it only together with iryo, and keep the tests on iryo's expected values. Results are drafts and observations, never adjudication or submission.
 - The bundled profiles are proposed and not in the canonical registry. Do not mark them registered until `com-junkawasaki/root` contains them, then copy the registry entry and record its revision.
+- PHI stays out of Recents, screenshots and backups. `MainActivity` sets `FLAG_SECURE` and turns off the Recents screenshot. The manifest has `allowBackup="false"` and `data_extraction_rules.xml`, which excludes every domain. `gen/android` is committed; after any `tauri android init`, run `node scripts/android-hardening.mjs apply`. `npm test` and `build:android` fail if it is missing.
 - Health stays fail-closed. Do not launch or reconfigure live bots from this repository.
 - Keep source, build, device, distribution and live-operation evidence separate, and record unknowns as unknown.
 
