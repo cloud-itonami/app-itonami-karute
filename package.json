@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "squint compile && node .agent-output/compiled/karute/build.mjs",
-    "test": "squint compile && node --test .agent-output/compiled/domain_test.mjs .agent-output/compiled/soap_test.mjs .agent-output/compiled/rezept_test.mjs .agent-output/compiled/draft_test.mjs .agent-output/compiled/handoff_test.mjs .agent-output/compiled/shared_status_test.mjs .agent-output/compiled/member_keys_test.mjs scripts/android-hardening.test.mjs",
+    "test": "squint compile && node --test .agent-output/compiled/domain_test.mjs .agent-output/compiled/soap_test.mjs .agent-output/compiled/rezept_test.mjs .agent-output/compiled/draft_test.mjs .agent-output/compiled/handoff_test.mjs .agent-output/compiled/shared_status_test.mjs .agent-output/compiled/member_keys_test.mjs scripts/android-hardening.test.mjs scripts/android-apk-check.test.mjs",
     "tauri": "tauri",
     "build:android": "node scripts/android-hardening.mjs check && npm run build && tauri android build --debug --apk --target aarch64",
     "build:android:x86": "node scripts/android-hardening.mjs check && npm run build && tauri android build --debug --apk --target x86_64"
