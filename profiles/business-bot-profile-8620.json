@@ -5,9 +5,10 @@
     "path": "blueprint.edn",
     "revision": "017b02dd56ca84192dc57d8ca8c053c1978b584b",
     "registry_schema": "itonami.business-bot-profiles.v1",
-    "registry_state": "not-registered",
-    "registry_checked": "com-junkawasaki/root 90-docs/business/itonami-business-bot-profiles.json 7d484e131a8 has no 8620 entry; https://itonami.cloud/api/open-business returned HTTP 500 on 2026-11-18",
-    "transformation": "authored from blueprint.edn (id, name, isic, governor) in the shape of the registry profile_schema; runtime/money/audit/health copied from the registry template; not a registry copy"
+    "registry_state": "registered",
+    "registry_checked": "registered in com-junkawasaki/root@4f23033b6300; live API https://itonami.cloud/api/open-business -> 503 on 2026-11-22",
+    "transformation": "registry copy of com-junkawasaki/root@4f23033b6300 (was: authored from blueprint.edn (id, name, isic, governor) in the shape of the registry profile_schema; runtime/money/audit/health copied from the registry template; not a registry copy)",
+    "registry_revision": "4f23033b63008df4cc722968fda6624c87353c91"
   },
   "mission": {
     "statement": "全人類を労働から解放する",
@@ -19,13 +20,14 @@
     "kind": "business",
     "business_blueprint": {
       "id": "cloud-itonami-isic-8620",
-      "name": "Medical and dental practice activities",
+      "name": "Medical and Dental Practice Activities",
       "domain": "health/medical-dental-practice",
       "isic_rev5": "8620",
       "repo": "https://github.com/cloud-itonami/app-itonami-cloud-itonami-isic-8620",
-      "governor": "clinical-practice-governor",
+      "repo_path": "/gftdcojp/app-itonami-cloud-itonami-isic-8620",
+      "governor": "medical-practice-governor",
       "console": null,
-      "offer": "Governed clinical-practice records (電子カルテ): structured SOAP notes, consented encrypted records, and a PHI-free billing hand-off to iryo. The clinician decides; the bot drafts and checks.",
+      "offer": "Governed medical and dental practice: encounter intake, jurisdiction licensing assessment, clinician-credential screening, and treatment administration as an OSS business forkable by licensed physicians and dentists.",
       "self_registered": false,
       "maturity_seed": false
     },
@@ -34,15 +36,15 @@
       "note": "agentmail inbox optional; not provisioned yet"
     },
     "mission": {
-      "thesis": "全人類を労働から解放する — blueprint が担う経済領域を governed actor で自動化する",
-      "domain_goal": "care-record-quality",
+      "thesis": "医療記録の正確性と診療の継続性を、人間の医師・歯科医の判断を中心に保ちながら自動化する",
+      "domain_goal": "medical-record-accuracy",
       "domain_family": "health"
     },
     "runtime": {
       "plane": "itonami-grok-bots (DO per bot)",
       "model": "murakumo-main alias (KV resolved; never hardcode model ids)",
       "interval_ms": 3600000,
-      "governor": "clinical-practice-governor",
+      "governor": "medical-practice-governor",
       "registry_source": "https://itonami.cloud/api/open-business (DO re-fetches at launch)"
     },
     "money": {
@@ -69,12 +71,19 @@
       "rule": "running is not healthy; read last_error + published vs failed + recent checkpoint"
     },
     "phi": {
-      "rule": "PHI (氏名・生年月日・SOAP 本文・保険者番号) never enters the bot plane, the public feed or the app origin; the bot works only on encrypted records and PHI-free references",
-      "basis": "cloud-itonami/karute AGENTS.md, cloud-itonami/iryo manifest.edn G2"
+      "rule": "PHI（氏名・生年月日・保険証番号・診療録）は暗号化して保存し、平文のまま記録・転送・学習に使わない。照会は同意 capability の提示を必須とする。",
+      "stores": [
+        "encrypted_records",
+        "consent_capabilities"
+      ],
+      "excludes": [
+        "plaintext_phi",
+        "model_training_on_phi"
+      ]
     },
     "provisioning": {
-      "state": "proposed",
-      "next_action": "register-in-canonical-registry (AWAI-3380 child)"
+      "state": "blueprint-only",
+      "next_action": "operator approval needed to launch (POST /v1/grok-bots)"
     }
   }
 }

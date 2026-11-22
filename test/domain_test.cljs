@@ -13,11 +13,11 @@
 (defn as-ours [body id]
   (let [b (clone body)] (aset (aget (aget (.-data b) 0) "business") "id" id) b))
 
-(test "both bundled medical profiles verify and say they are not in the registry yet"
+(test "both bundled medical profiles verify and are registry copies"
   (fn [] (doseq [id d/blueprints]
            (let [p (get profiles id)]
              (a/deepEqual (d/profile-problems p id) [])
-             (a/equal (get-in p [:provenance :registry_state]) "not-registered")
+             (a/equal (get-in p [:provenance :registry_state]) "registered")
              (a/ok (.includes (get-in p [:profile :phi :rule]) "PHI"))))))
 
 (test "negative controls: a changed mission, family, registry state or service is refused"
